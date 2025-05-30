@@ -18,21 +18,16 @@ enum ServoPosition { NONE = 0, HOME = 1, HOLD = 2, LIFT = 3, GRIP = 4, CAPTURE =
 // Custom data structure with servo control
 struct Data
 {
-  bool yellow, green, red;
-  bool buttonA, buttonB, buttonC;
-
-  int16_t leftMotor, rightMotor;
-  uint16_t batteryMillivolts;
-  uint16_t analog[6];
-
-  bool playNotes;
-  char notes[14];
-
-  int16_t leftEncoder, rightEncoder;
-  
-  // Servo control fields
-  uint8_t servoPosition;  // Position command: 0=none, 1=home, 2=hold, 3=lift, 4=grip, 5=capture
-  bool servoEnable;       // Enable/disable servos
+  bool yellow, green, red;           // 0, 1, 2 (3 bytes)
+  bool buttonA, buttonB, buttonC;    // 3, 4, 5 (3 bytes)
+  int16_t leftMotor, rightMotor;     // 6, 7, 8, 9 (4 bytes)
+  uint16_t batteryMillivolts;        // 10, 11 (2 bytes)
+  uint16_t analog[6];                // 12-23 (12 bytes)
+  bool playNotes;                    // 24 (1 byte)
+  char notes[14];                    // 25-38 (14 bytes)
+  int16_t leftEncoder, rightEncoder; // 39-42 (4 bytes)
+  uint8_t servoPosition;             // 43 (1 byte) 
+  bool servoEnable;                  // 44 (1 byte)
 };
 
 PololuRPiSlave<struct Data,20> slave;
@@ -50,6 +45,7 @@ unsigned long lastServoUpdate = 0;
 
 void setup()
 {
+  Serial.begin(9600); 
   // Set up the slave at I2C address 20.
   slave.init(20);
 
@@ -118,6 +114,17 @@ void handleServoControl() {
     return;
   }
   lastServoUpdate = millis();
+
+  ////////////////// DEBUG LINES //////////////////////////////////////////////////////
+  Serial.print("servoEnable: ");
+  Serial.print(slave.buffer.servoEnable);
+  Serial.print(", servoPosition: ");
+  Serial.print(slave.buffer.servoPosition);
+  Serial.print(", servosAttached: ");
+  Serial.print(servosAttached);
+  Serial.print(", currentPosition: ");
+  Serial.println(currentPosition);
+////////////////////////////////////////////////////////////////////////////////////////
 
   // Handle servo enable/disable
   if (slave.buffer.servoEnable && !servosAttached) {

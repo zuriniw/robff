@@ -3,6 +3,21 @@ import smbus
 import struct
 import time
 
+# for reference, this is the slave data map:
+# struct Data
+# {
+#   bool yellow, green, red;           // 0, 1, 2 (3 bytes)
+#   bool buttonA, buttonB, buttonC;    // 3, 4, 5 (3 bytes)
+#   int16_t leftMotor, rightMotor;     // 6, 7, 8, 9 (4 bytes)
+#   uint16_t batteryMillivolts;        // 10, 11 (2 bytes)
+#   uint16_t analog[6];                // 12-23 (12 bytes)
+#   bool playNotes;                    // 24 (1 byte)
+#   char notes[14];                    // 25-38 (14 bytes)
+#   int16_t leftEncoder, rightEncoder; // 39-42 (4 bytes)
+#   uint8_t servoPosition;             // 43 (1 byte) 
+#   bool servoEnable;                  // 44 (1 byte)
+# };
+
 class AStar:
   def __init__(self):
     self.bus = smbus.SMBus(1)
@@ -65,22 +80,32 @@ class AStar:
   SERVO_LIFT = 3
   SERVO_GRIP = 4
   SERVO_CAPTURE = 5
-  
+
   def servo_enable(self, enable=True):
     """Enable or disable servo control"""
-    # Address 43 based on Arduino Data struct layout
-    self.write_pack(43, 'B', int(enable))
-    time.sleep(0.1)  # Give time for servos to attach
+    self.write_pack(44, 'B', int(enable))
+    time.sleep(0.1)
+
+  def servo_set_position(self, position):
+    """Set servo to predefined position (0-5)"""
+    self.write_pack(43, 'B', position)
+    time.sleep(0.1)
+
+  def read_servo_status(self):
+    """Read servo enable status and current position"""
+    try:
+      position = self.read_unpack(43, 1, 'B')[0]
+      enabled = self.read_unpack(44, 1, 'B')[0]
+      return {
+        'position': position,
+        'enabled': bool(enabled)
+      }
+    except:
+      return {'position': 0, 'enabled': False}
   
   def servo_disable(self):
     """Disable servo control"""
     self.servo_enable(False)
-  
-  def servo_set_position(self, position):
-    """Set servo to predefined position (0-5)"""
-    # Address 42 based on Arduino Data struct layout  
-    self.write_pack(42, 'B', position)
-    time.sleep(0.1)
   
   def servo_home(self):
     """Move to home position (mid, flat, open)"""
@@ -112,15 +137,3 @@ class AStar:
     self.servo_home()
     time.sleep(2)  # Wait for movement to complete
     self.servo_disable()
-  
-  def read_servo_status(self):
-    """Read servo enable status and current position"""
-    try:
-      # Read servoPosition (address 42) and servoEnable (address 43)
-      data = self.read_unpack(42, 2, 'BB')
-      return {
-        'position': data[0],
-        'enabled': bool(data[1])
-      }
-    except:
-      return {'position': 0, 'enabled': False}
