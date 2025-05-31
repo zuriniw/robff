@@ -16,8 +16,8 @@ from utilities.robot_buttom import RobotButtonControl
 robot_control = RobotButtonControl(a_star)
 
 # Import recording module
-from utilities.recording import RecordingControl
-recording_control = RecordingControl()
+from utilities.recording import RecordingControl_v2
+recording_control = RecordingControl_v2()
 
 import json
 

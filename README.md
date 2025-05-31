@@ -1,67 +1,134 @@
-# Romi Robot with Servo Arm Control
+# Romi Robot with Arm Control
 
-A Raspberry Pi-controlled Romi robot with robotic arm capabilities using I2C communication.
+A Flask-based web interface for controlling a Romi robot with integrated servo arm system and recording capabilities.
 
-## Quick Start
+## Features
 
-### Hardware Testing (Arduino Only)
+### Robot Movement
+- Tank-style drive system with speed control (slow/moderate/fast)
+- Right wheel correction (64% reduction) for straight movement
+- Minimum motor threshold (60) to prevent stalling
+- Multiple control methods:
+  - Virtual joystick with visual guides
+  - Direction buttons (↑,↓,←,→)
+  - Keyboard controls (WASD)
 
-Test the servo arm independently before full integration:
+### Robotic Arm
+- 3-servo system with PWM control:
+  - Lift servo (1000-1900μs)
+  - Tilt servo (1210-1890μs)
+  - Gripper servo (500-2330μs)
+- Visual slider controls with live feedback
+- Preset positions:
+  - Home (mid, flat, open)
+  - Hold (mid, flat, close)
+  - Lift (up, up, close)
+  - Grip (down, down, close) 
+  - Capture (down, down, open)
+  - Park (home then disable)
 
-1. Upload `overall_test_servos.ino` to Arduino board
-2. Open Serial Monitor (9600 baud)
-3. Use keyboard commands to control the robotic arm:
-   - `home` - Move to safe home position
-   - `capture` - Position for grabbing objects
-   - `grip` - Close gripper on object
-   - `lift` - Lift object up
-   - `park` - Return to park position
+### Recording System
+- Version 1:
+  - Separate video (MP4) and audio (WAV) files
+  - Known issue: 2s video delay from audio
+- Version 2 (Recommended):
+  - Combined MP4 output with synchronized audio/video
+  - First 0.8s of audio trimmed for sync
+  - H264 video encoding with AAC audio
+  - Quality settings:
+    - Video: 1080p@30fps, 5Mbps
+    - Audio: 44.1kHz, 16-bit stereo, 192k AAC
 
-### Full System (Raspberry Pi + Arduino)
+To switch between versions, modify in server.py:
 
-Run the complete robot control system:
+```python
+# For Version 1
+from utilities.recording import RecordingControl_v1 as RecordingControl
 
-1. **Arduino Setup:**
-   - Upload `arduino_slave.ino` to Arduino board
+# For Version 2 (Recommended)
+from utilities.recording import RecordingControl_v2 as RecordingControl
+```
 
-2. **Raspberry Pi Setup:**
-   - Ensure SSH and I2C are enabled
-   - Run `python3 server.py`
-
-3. **Access Control Panel:**
-   - Visit `http://172.20.10.10:5000/` in your browser
-   - Control both chassis movement and servo arm
-
-![Control Panel](https://raw.githubusercontent.com/zzww-code/what/master/202505301820045.png)
+### Additional Features
+- System pause/resume functionality
+- LED control interface
+- Musical note playback
+- Real-time sensor readings:
+  - Button states
+  - Battery voltage
+  - Analog inputs
+  - Motor encoders
+  - Servo status
 
 ## Architecture
 
 ```
-Web Interface → Flask Server → I2C Communication → Arduino → Hardware
+Web Interface (HTML/CSS/JS)
+      ↓
+Flask Server (Python)
+      ↓
+I2C Communication (AStar)
+      ↓
+Arduino Controller
+      ↓
+Hardware (Motors/Servos)
 ```
 
-### File Structure
+## Setup Instructions
 
-**Arduino Code** (`arduino/` folder):
-- `overall_test_servos.ino` - Standalone servo testing
-- `arduino_slave.ino` - I2C slave for full system
-
-**Raspberry Pi Code** (root folder):
-- `a_star.py` - I2C communication interface
-- `server.py` - Flask web server
-- `static/`, `templates/` - Web UI files  
-- `utilities/` - Modularized robot features
-
-## Features
-
-- **Chassis Control:** Tank-style movement with speed control
-- **Servo Arm:** 5-position robotic arm (home, capture, grip, lift, park)
-- **Web Interface:** Real-time control and status monitoring
-- **Dual Mode:** Hardware testing + full system integration
-
-## Hardware Requirements
-
+### Hardware Requirements
 - Romi 32U4 Control Board
-- Raspberry Pi (with I2C enabled)
-- 3-servo robotic arm (lift, tilt, gripper)
-- Power supply for servos
+- Raspberry Pi (I2C enabled)
+- 3-Servo Robotic Arm:
+  - Lift: Pin 21
+  - Tilt: Pin 22
+  - Gripper: Pin 11
+- Pi Camera Module (for recording)
+- USB Audio Device
+
+### Software Setup
+
+1. **Arduino Setup**
+```bash
+# Upload arduino_slave.ino to Romi board
+```
+
+2. **Raspberry Pi Setup**
+```bash
+# Install dependencies
+sudo apt-get install python3-flask python3-smbus
+
+# Start server
+python3 server.py
+```
+
+3. **Access Control Panel**
+```
+http://[RPI_IP]:5000/
+```
+
+## File Structure
+
+```
+├── arduino/
+│   ├── arduino_slave.ino      # Main Arduino controller
+│   └── overall_test_servos.ino # Standalone servo tester
+├── static/
+│   ├── main.css              # UI styling
+│   └── script.js             # Frontend logic
+├── templates/
+│   └── index.html            # Web interface
+├── utilities/
+│   ├── robot_buttom.py       # Robot movement control
+│   └── recording.py          # Audio/video recording
+├── a_star.py                 # I2C communication
+└── server.py                 # Flask server
+```
+
+## Contributing
+
+Please ensure any pull requests follow the existing code structure and include appropriate documentation.
+
+## License
+
+Copyright Pololu Corporation. For more information, see https://www.pololu.com/
