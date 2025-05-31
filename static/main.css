@@ -8,6 +8,7 @@ html {
 body {
   margin: 0;
   padding: 0;
+  background: #fafafa;
 }
 
 input, button {
@@ -17,148 +18,448 @@ input, button {
 #container {
   display: inline-block;
   max-width: 600px;
-  padding: 0.5em;
+  padding: 1em;
 }
 
-h1 {
-  font-size: 1rem;
+/* ============================================================================ */
+/* TOP CONTROLS - RECORD, PAUSE, SHUTDOWN */
+/* ============================================================================ */
+
+.top-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2em;
+  padding: 0 1em;
+}
+
+.top-btn {
+  padding: 10px 20px;
+  border: 2px solid #666;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
   font-weight: bold;
-  text-align: center;
-  margin: 0;
-  margin-bottom: 0.5em;
-}
-
-h2 {
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
   font-size: 0.9rem;
-  font-weight: bold;
-  text-align: center;
-  margin: 0.5em 0;
+  min-width: 100px;
 }
 
-td,th {
-  width: 3em;
-  text-align: right;
+.top-btn:hover {
+  background: #f0f0f0;
 }
 
-td.center {
-  text-align: center;
+.top-btn.center {
+  background: #ddd;
+  border-color: #999;
 }
 
-td.wide {
-  width: 5em;
+.top-btn.center:hover {
+  background: #ccc;
 }
 
-table {
-  border-collapse: collapse;
-  margin-bottom: 1em;
+.top-btn.center.paused {
+  background: #ffeb3b;
+  border-color: #fbc02d;
 }
 
-table td, table th {
-  border: 1px solid black;
-  padding: 0.5em;
-}
+/* ============================================================================ */
+/* CONTROL SECTIONS */
+/* ============================================================================ */
 
 .control-section {
-  margin: 1em 0;
-  padding: 0.5em;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+  margin: 2em 0;
+  padding: 1em;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
 }
 
-.button-row {
+/* ============================================================================ */
+/* PRESET BUTTONS - MORE SPACING */
+/* ============================================================================ */
+
+.preset-row {
   display: flex;
   justify-content: center;
+  gap: 1.5em;
+  margin-bottom: 2em;
   flex-wrap: wrap;
-  gap: 0.5em;
-  margin: 0.5em 0;
 }
 
-.control-btn {
-  padding: 0.5em 1em;
-  border: 1px solid #333;
-  border-radius: 5px;
-  background-color: #f0f0f0;
+.preset-btn {
+  padding: 12px 24px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: bold;
+  min-width: 80px;
+}
+
+.preset-btn:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.preset-btn:active {
+  background: #eee;
+}
+
+/* ============================================================================ */
+/* MINIMAL SLIDERS */
+/* ============================================================================ */
+
+.servo-sliders {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5em;
+}
+
+.slider-group {
+  width: 100%;
+  max-width: 400px;
+}
+
+.slider-header {
+  margin-bottom: 8px;
+}
+
+.slider-header label {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.slider-container {
+  position: relative;
+  width: 100%;
+}
+
+/* Minimal current value display */
+.slider-current-value {
+  position: absolute;
+  top: -20px;
+  transform: translateX(-50%);
+  background: #666;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Minimal slider styling */
+.minimal-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #e0e0e0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
   cursor: pointer;
 }
 
-.control-btn:hover {
-  background-color: #e0e0e0;
+.minimal-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #666;
+  cursor: pointer;
+  border: none;
 }
 
-.control-btn:active {
-  background-color: #d0d0d0;
+.minimal-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #666;
+  cursor: pointer;
+  border: none;
+}
+
+/* Simple labels below slider */
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: #888;
+}
+
+.slider-label {
+  font-size: 0.7rem;
+  color: #888;
+}
+
+/* ============================================================================ */
+/* MOVEMENT CONTROLS - REDESIGNED LAYOUT */
+/* ============================================================================ */
+
+.movement-control-area {
+  display: flex;
+  gap: 1.5em;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+}
+
+/* Left Side: Speed + Direction Controls */
+.left-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2em;
+  min-width: 140px;
+  flex-shrink: 0;
+  padding-top: 39px; /* Align with joystick top: motor-display height (24px) + margin-bottom (15px) */
+}
+
+/* Speed Controls - More Vertical Spacing */
+.speed-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5em;
+  width: 100%;
 }
 
 .speed-btn {
-  padding: 0.5em 1em;
-  border: 1px solid #333;
-  border-radius: 5px;
-  background-color: #f0f0f0;
+  padding: 10px 16px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
   cursor: pointer;
-  transition: background-color 0.2s;
+  font-size: 0.8rem;
+  color: #333;
 }
 
 .speed-btn:hover {
-  background-color: #e0e0e0;
+  background: #f5f5f5;
+  border-color: #999;
 }
 
 .speed-active {
-  background-color: #b8e0b8;
-  border-color: #4CAF50;
+  background: #eee;
+  border-color: #999;
 }
 
-.movement-grid {
+/* Direction Controls */
+.direction-controls {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5em;
 }
 
-.movement-grid .row {
+.direction-row {
   display: flex;
   justify-content: center;
   gap: 0.5em;
   width: 100%;
 }
 
-.movement-grid .row > div {
-  width: 60px;
-  height: 40px;
+.direction-row > div {
+  width: 50px;
+  height: 50px;
 }
 
-.movement-grid .control-btn {
-  width: 60px;
-  height: 40px;
+/* Circular Movement Buttons */
+.movement-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  background: #fff;
+  cursor: pointer;
   font-size: 1.2em;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #333;
 }
 
+.movement-btn:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.movement-btn:active {
+  background: #eee;
+}
+
+/* Right Side: Joystick Area - Maximized */
+.joystick-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 350px;
+  max-width: 400px;
+}
+
+/* Motor Display Above Joystick - Centered */
+.motor-display {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: bold;
+  margin-bottom: 15px;
+  text-align: center;
+  width: 100%;
+}
+
+/* Large Square Joystick - Maximized */
 #joystick {
-  border: 1px solid black;
-  background-color: gray;
-  width: 14em;
-  height: 14em;
-  margin-left: auto;
-  margin-right: auto;
+  position: relative;
+  border: 2px solid #ccc;
+  background-color: #f8f8f8;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: visible;
+  max-width: 350px;
 }
 
-.servo-btn {
-  padding: 8px 12px;
-  margin: 0 3px;
+/* Reference Lines and Circle */
+.joystick-guides {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Cross Reference Lines */
+.guide-line {
+  position: absolute;
+  background: #999;
+  opacity: 0.8;
+  z-index: 10;
+}
+
+.guide-line.horizontal {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.guide-line.vertical {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+/* Reference Circle (radius = 1/2 of square) */
+.guide-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 50%;
+  border: 2px dashed #999;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.7;
+  z-index: 10;
+}
+
+/* ============================================================================ */
+/* BOTTOM CONTROLS */
+/* ============================================================================ */
+
+.bottom-controls {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: center;
+  margin: 2em 0;
+}
+
+.led-play-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+}
+
+.led-controls, .play-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.play-controls input {
+  font-size: 0.7rem;
+  padding: 4px;
   border: 1px solid #ccc;
-  background-color: #f0f0f0;
-  cursor: pointer;
   border-radius: 4px;
-  font-size: 14px;
+}
+
+.play-controls button {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.readings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.7rem;
+}
+
+.readings-row {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.reading-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.reading-item strong {
   min-width: 60px;
+  text-align: left;
+  font-size: 0.7rem;
 }
 
-.servo-btn:hover {
-  background-color: #e0e0e0;
+.reading-values {
+  display: flex;
+  gap: 4px;
 }
 
-.servo-btn:active {
-  background-color: #d0d0d0;
+.reading-values span {
+  display: inline-block;
+  min-width: 30px;
+  text-align: center;
+  padding: 2px 4px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 0.65rem;
 }

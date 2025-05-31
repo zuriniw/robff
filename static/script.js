@@ -1,4 +1,10 @@
 // Copyright Pololu Corporation.  For more information, see https://www.pololu.com/
+
+// ============================================================================
+// GLOBAL VARIABLES
+// ============================================================================
+
+// Motor control state
 stop_motors = true
 block_set_motors = false
 mouse_dragging = false
@@ -11,7 +17,16 @@ let keys_pressed = {
   s: false,
   d: false
 }
+
+// Recording state
 let is_recording = false
+
+// Pause state
+let is_paused = false
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
 
 function init() {
   poll()
@@ -22,34 +37,72 @@ function init() {
   $(document).bind("mousemove",mousemove)
   $(document).bind("mouseup",mouseup)
   
-  // Initialize movement buttons
+  // Initialize all control systems
   initMovementButtons()
   initRotationButtons()
   initSpeedButtons()
   initKeyboardControls()
   initRecordingButton()
-  initServoButtons()  // Add servo button initialization
+  initServoButtons()
+  initPauseButton()  // Add pause button initialization
 }
 
+// ============================================================================
+// PAUSE CONTROL
+// ============================================================================
+
+function initPauseButton() {
+  $("#pause-btn").on("click", function(e) {
+    e.preventDefault()
+    togglePause()
+  })
+}
+
+function togglePause() {
+  is_paused = !is_paused
+  
+  if (is_paused) {
+    // 暂停时立即停止所有运动并通知服务器
+    $.ajax({url: "pause"})
+    $.ajax({url: "motors/0,0"})
+    
+    $("#pause-btn").html("RESUME")
+    $("#pause-btn").addClass("paused")
+    console.log("System PAUSED")
+  } else {
+    // 恢复时通知服务器
+    $.ajax({url: "resume"})
+    
+    $("#pause-btn").html("PAUSE") 
+    $("#pause-btn").removeClass("paused")
+    console.log("System RESUMED")
+  }
+}
+
+// ============================================================================
+// SPEED CONTROL
+// ============================================================================
+
 function initSpeedButtons() {
-  // Speed buttons click handlers
   $("#slow-btn").on("click", function(e) {
     e.preventDefault()
-    setSpeed("slow")
+    if (!is_paused) setSpeed("slow")
   })
   
   $("#moderate-btn").on("click", function(e) {
     e.preventDefault()
-    setSpeed("moderate")
+    if (!is_paused) setSpeed("moderate")
   })
   
   $("#fast-btn").on("click", function(e) {
     e.preventDefault()
-    setSpeed("fast")
+    if (!is_paused) setSpeed("fast")
   })
 }
 
 function setSpeed(level) {
+  if (is_paused) return
+  
   // Update active button styling
   $(".speed-btn").removeClass("speed-active")
   $("#" + level + "-btn").addClass("speed-active")
@@ -59,11 +112,15 @@ function setSpeed(level) {
   $.ajax({url: "set_speed/" + level})
 }
 
+// ============================================================================
+// MOVEMENT CONTROL - BUTTONS
+// ============================================================================
+
 function initMovementButtons() {
   // Forward button - press and hold to move forward, release to stop
   $("#forward-btn").on("mousedown touchstart", function(e) {
     e.preventDefault()
-    $.ajax({url: "move_forward"})
+    if (!is_paused) $.ajax({url: "move_forward"})
   })
   
   $("#forward-btn").on("mouseup mouseleave touchend", function(e) {
@@ -74,7 +131,7 @@ function initMovementButtons() {
   // Backward button - press and hold to move backward, release to stop
   $("#backward-btn").on("mousedown touchstart", function(e) {
     e.preventDefault()
-    $.ajax({url: "move_backward"})
+    if (!is_paused) $.ajax({url: "move_backward"})
   })
   
   $("#backward-btn").on("mouseup mouseleave touchend", function(e) {
@@ -85,7 +142,7 @@ function initMovementButtons() {
   // Left rotation - press and hold to rotate left, release to stop
   $("#left-btn").on("mousedown touchstart", function(e) {
     e.preventDefault()
-    $.ajax({url: "rotate_left"})
+    if (!is_paused) $.ajax({url: "rotate_left"})
   })
   
   $("#left-btn").on("mouseup mouseleave touchend", function(e) {
@@ -96,7 +153,7 @@ function initMovementButtons() {
   // Right rotation - press and hold to rotate right, release to stop
   $("#right-btn").on("mousedown touchstart", function(e) {
     e.preventDefault()
-    $.ajax({url: "rotate_right"})
+    if (!is_paused) $.ajax({url: "rotate_right"})
   })
   
   $("#right-btn").on("mouseup mouseleave touchend", function(e) {
@@ -106,94 +163,102 @@ function initMovementButtons() {
 }
 
 function initRotationButtons() {
-  // Remove old rotation button logic - now handled in initMovementButtons
+  // Rotation button logic now handled in initMovementButtons
 }
 
-// Add servo button initialization
-function initServoButtons() {
-  $("#servo-home-btn").on("click", function(e) {
-    e.preventDefault()
-    $.ajax({url: "servo/home"})
+// ============================================================================
+// MOVEMENT CONTROL - KEYBOARD
+// ============================================================================
+
+function initKeyboardControls() {
+  $(document).on("keydown", function(e) {
+    let key = e.key.toLowerCase()
+    if (key in keys_pressed && !keys_pressed[key]) {
+      keys_pressed[key] = true
+      if (!is_paused) updateMovementFromKeys()
+      e.preventDefault()
+    }
   })
   
-  $("#servo-capture-btn").on("click", function(e) {
-    e.preventDefault()
-    $.ajax({url: "servo/capture"})
-  })
-  
-  $("#servo-grip-btn").on("click", function(e) {
-    e.preventDefault()
-    $.ajax({url: "servo/grip"})
-  })
-  
-  $("#servo-lift-btn").on("click", function(e) {
-    e.preventDefault()
-    $.ajax({url: "servo/lift"})
-  })
-  
-  $("#servo-park-btn").on("click", function(e) {
-    e.preventDefault()
-    $.ajax({url: "servo/park"})
+  $(document).on("keyup", function(e) {
+    let key = e.key.toLowerCase()
+    if (key in keys_pressed && keys_pressed[key]) {
+      keys_pressed[key] = false
+      updateMovementFromKeys()
+      e.preventDefault()
+    }
   })
 }
 
-function poll() {
-  $.ajax({url: "status.json"}).done(update_status)
-  if(stop_motors && !block_set_motors)
-  {
-    setMotors(0,0);
-    stop_motors = false
-  }
-}
-
-function update_status(json) {
-  s = JSON.parse(json)
-  $("#button0").html(s["buttons"][0] ? '1' : '0')
-  $("#button1").html(s["buttons"][1] ? '1' : '0')
-  $("#button2").html(s["buttons"][2] ? '1' : '0')
-
-  $("#battery_millivolts").html(s["battery_millivolts"])
-
-  $("#analog0").html(s["analog"][0])
-  $("#analog1").html(s["analog"][1])
-  $("#analog2").html(s["analog"][2])
-  $("#analog3").html(s["analog"][3])
-  $("#analog4").html(s["analog"][4])
-  $("#analog5").html(s["analog"][5])
+function updateMovementFromKeys() {
+  let forward = keys_pressed.w
+  let backward = keys_pressed.s
+  let left = keys_pressed.a
+  let right = keys_pressed.d
   
-  $("#encoders0").html(s["encoders"][0])
-  $("#encoders1").html(s["encoders"][1])
-  
-  // Update servo status if available
-  if (s["servo_status"]) {
-    $("#servo-position").html(s["servo_status"]["position"])
-    $("#servo-enabled").html(s["servo_status"]["enabled"] ? "Yes" : "No")
+  // Check if any movement key is pressed
+  if (!forward && !backward && !left && !right) {
+    $.ajax({url: "stop_movement"})
+    return
   }
   
-  // Update speed button styling if it changed on the server
-  if (s["speed_level"] !== current_speed) {
-    current_speed = s["speed_level"]
-    $(".speed-btn").removeClass("speed-active")
-    $("#" + current_speed + "-btn").addClass("speed-active")
+  // If paused, stop movement
+  if (is_paused) {
+    $.ajax({url: "stop_movement"})
+    return
   }
-
-  setTimeout(poll, 100)
+  
+  // Calculate motor values like joystick but with fixed patterns
+  let left_motor = 0
+  let right_motor = 0
+  let base_strength = 200  // Match button base_speed = 200
+  
+  // Forward/backward movement
+  if (forward && !backward) {
+    left_motor += base_strength
+    right_motor += base_strength
+  } else if (backward && !forward) {
+    left_motor -= base_strength
+    right_motor -= base_strength
+  }
+  
+  // Left/right rotation (can combine with forward/backward)
+  if (left && !right) {
+    left_motor -= base_strength * 0.6
+    right_motor += base_strength * 0.6
+  } else if (right && !left) {
+    left_motor += base_strength * 0.6
+    right_motor -= base_strength * 0.6
+  }
+  
+  // Limit motor values
+  left_motor = Math.max(-200, Math.min(200, left_motor))
+  right_motor = Math.max(-200, Math.min(200, right_motor))
+  
+  setMotors(Math.round(left_motor), Math.round(right_motor))
 }
+
+// ============================================================================
+// MOVEMENT CONTROL - JOYSTICK
+// ============================================================================
 
 function touchmove(e) {
   e.preventDefault()
-  touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
-  dragTo(touch.pageX, touch.pageY)
+  if (!is_paused) {
+    touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
+    dragTo(touch.pageX, touch.pageY)
+  }
 }
 
 function mousedown(e) {
   e.preventDefault()
-  mouse_dragging = true
+  if (!is_paused) {
+    mouse_dragging = true
+  }
 }
 
 function mouseup(e) {
-  if(mouse_dragging)
-  {
+  if(mouse_dragging) {
     e.preventDefault()
     mouse_dragging = false
     stop_motors = true
@@ -201,14 +266,15 @@ function mouseup(e) {
 }
 
 function mousemove(e) {
-  if(mouse_dragging)
-  {
+  if(mouse_dragging && !is_paused) {
     e.preventDefault()
     dragTo(e.pageX, e.pageY)
   }
 }
 
 function dragTo(x, y) {
+  if (is_paused) return
+  
   elm = $('#joystick').offset();
   x = x - elm.left;
   y = y - elm.top;
@@ -249,8 +315,19 @@ function touchend(e) {
   stop_motors = true
 }
 
+// ============================================================================
+// MOTOR COMMUNICATION
+// ============================================================================
+
 function setMotors(left, right) {
-  $("#joystick").html("Motors: " + left + " "+ right)
+  // If paused, force motors to stop
+  if (is_paused) {
+    left = 0
+    right = 0
+  }
+  
+  // Update motor display above joystick
+  $("#motor-display").text("Motors: " + left + " " + right)
 
   if(block_set_motors) return
   block_set_motors = true
@@ -261,6 +338,167 @@ function setMotors(left, right) {
 function setMotorsDone() {
   block_set_motors = false
 }
+
+// ============================================================================
+// SERVO CONTROL - PREDEFINED POSITIONS
+// ============================================================================
+
+function initServoButtons() {
+  $("#servo-home-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_paused) servoHome()
+  })
+  
+  $("#servo-capture-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_paused) servoCapture()
+  })
+  
+  $("#servo-grip-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_paused) servoGrip()
+  })
+  
+  $("#servo-lift-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_paused) servoLift()
+  })
+  
+  $("#servo-park-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_paused) servoPark()
+  })
+}
+
+function servoHome() {
+  if (is_paused) return
+  fetch('/servo/home').then(() => {
+    setTimeout(updateSlidersFromPreset, 200)
+  });
+}
+
+function servoHold() {
+  if (is_paused) return
+  fetch('/servo/hold').then(() => {
+    setTimeout(updateSlidersFromPreset, 200)
+  });
+}
+
+function servoCapture() {
+  if (is_paused) return
+  fetch('/servo/capture').then(() => {
+    setTimeout(updateSlidersFromPreset, 200)
+  });
+}
+
+function servoGrip() {
+  if (is_paused) return
+  fetch('/servo/grip').then(() => {
+    setTimeout(updateSlidersFromPreset, 200)
+  });
+}
+
+function servoLift() {
+  if (is_paused) return
+  fetch('/servo/lift').then(() => {
+    setTimeout(updateSlidersFromPreset, 200)
+  });
+}
+
+function servoPark() {
+  if (is_paused) return
+  fetch('/servo/park').then(() => {
+    setTimeout(updateSlidersFromPreset, 200)
+  });
+}
+
+// ============================================================================
+// SERVO CONTROL - MANUAL PWM SLIDERS
+// ============================================================================
+
+function updateSliderValue(servo, value) {
+    // 立即更新显示，不等待网络请求
+    const valueElement = document.getElementById(servo + 'Value');
+    const currentValueElement = document.getElementById(servo + 'CurrentValue');
+    
+    if (valueElement) {
+        valueElement.textContent = value;
+    }
+    
+    if (currentValueElement) {
+        currentValueElement.textContent = value + 'μs';
+        
+        // 计算并更新气泡位置
+        let percentage;
+        switch(servo) {
+            case 'lift':
+                percentage = ((value - 1000) / (1900 - 1000)) * 100;
+                break;
+            case 'tilt':
+                percentage = ((value - 1300) / (1750 - 1300)) * 100;
+                break;
+            case 'gripper':
+                percentage = ((value - 500) / (2330 - 500)) * 100;
+                break;
+        }
+        currentValueElement.style.left = percentage + '%';
+    }
+}
+
+function setServoPWM(servo, value) {
+  // If paused, don't send servo commands
+  if (is_paused) return
+  
+  fetch(`/servo/pwm/${servo}/${value}`)
+    .then(() => {
+      // Network request completed
+    });
+}
+
+function updateSlidersFromPreset() {
+  fetch('/servo/pwm_values.json')
+    .then(response => response.json())
+    .then(data => {
+      // 更新slider值
+      document.getElementById('liftSlider').value = data.lift;
+      document.getElementById('tiltSlider').value = data.tilt;
+      document.getElementById('gripperSlider').value = data.gripper;
+      
+      // 更新显示和气泡位置
+      updateSliderValue('lift', data.lift);
+      updateSliderValue('tilt', data.tilt);
+      updateSliderValue('gripper', data.gripper);
+    });
+}
+
+// ============================================================================
+// RECORDING CONTROL
+// ============================================================================
+
+function initRecordingButton() {
+  $("#record-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_recording) {
+      // Start recording
+      $.ajax({url: "start_recording"}).done(function() {
+        is_recording = true
+        $("#record-btn").html("Stop Recording")
+        $("#record-btn").css("background-color", "#ff4444")
+      })
+    } else {
+      // Stop recording
+      $.ajax({url: "stop_recording"}).done(function() {
+        is_recording = false
+        $("#record-btn").html("Start Recording")
+        $("#record-btn").css("background-color", "")
+      })
+    }
+  })
+}
+
+// ============================================================================
+// LED AND BUZZER CONTROL
+// ============================================================================
 
 function setLeds() {
   led0 = $('#led0')[0].checked ? 1 : 0
@@ -274,92 +512,70 @@ function playNotes() {
   $.ajax({url: "play_notes/"+notes})
 }
 
+// ============================================================================
+// STATUS POLLING AND UPDATES
+// ============================================================================
+
+function poll() {
+  $.ajax({url: "status.json"}).done(update_status)
+  if(stop_motors && !block_set_motors) {
+    setMotors(0,0);
+    stop_motors = false
+  }
+}
+
+function update_status(json) {
+  s = JSON.parse(json)
+  $("#button0").html(s["buttons"][0] ? '1' : '0')
+  $("#button1").html(s["buttons"][1] ? '1' : '0')
+  $("#button2").html(s["buttons"][2] ? '1' : '0')
+
+  $("#battery_millivolts").html(s["battery_millivolts"])
+
+  $("#analog0").html(s["analog"][0])
+  $("#analog1").html(s["analog"][1])
+  $("#analog2").html(s["analog"][2])
+  $("#analog3").html(s["analog"][3])
+  $("#analog4").html(s["analog"][4])
+  $("#analog5").html(s["analog"][5])
+  
+  $("#encoders0").html(s["encoders"][0])
+  $("#encoders1").html(s["encoders"][1])
+  
+  // Update servo status if available
+  if (s["servo_status"]) {
+    $("#servo-position").html(s["servo_status"]["position"])
+    $("#servo-enabled").html(s["servo_status"]["enabled"] ? "Yes" : "No")
+  }
+  
+  // Update speed button styling if it changed on the server
+  if (s["speed_level"] !== current_speed) {
+    current_speed = s["speed_level"]
+    $(".speed-btn").removeClass("speed-active")
+    $("#" + current_speed + "-btn").addClass("speed-active")
+  }
+
+  // Sync pause state with server
+  if (s["paused"] !== undefined && s["paused"] !== is_paused) {
+    is_paused = s["paused"]
+    if (is_paused) {
+      $("#pause-btn").html("RESUME")
+      $("#pause-btn").addClass("paused")
+    } else {
+      $("#pause-btn").html("PAUSE")
+      $("#pause-btn").removeClass("paused")
+    }
+  }
+
+  setTimeout(poll, 100)
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
 function shutdown() {
   if (confirm("Really shut down the Raspberry Pi?"))
     return true
   return false
-}
-
-function initKeyboardControls() {
-  $(document).on("keydown", function(e) {
-    let key = e.key.toLowerCase()
-    if (key in keys_pressed && !keys_pressed[key]) {
-      keys_pressed[key] = true
-      updateMovementFromKeys()
-      e.preventDefault()
-    }
-  })
-  
-  $(document).on("keyup", function(e) {
-    let key = e.key.toLowerCase()
-    if (key in keys_pressed && keys_pressed[key]) {
-      keys_pressed[key] = false
-      updateMovementFromKeys()
-      e.preventDefault()
-    }
-  })
-}
-
-function updateMovementFromKeys() {
-  let forward = keys_pressed.w
-  let backward = keys_pressed.s
-  let left = keys_pressed.a
-  let right = keys_pressed.d
-  
-  // Check if any movement key is pressed
-  if (!forward && !backward && !left && !right) {
-    $.ajax({url: "stop_movement"})
-    return
-  }
-  
-  // For keyboard, we'll calculate like joystick but use fixed patterns
-  let left_motor = 0
-  let right_motor = 0
-  let base_strength = 200  // Match button base_speed = 200
-  
-  // Forward/backward movement
-  if (forward && !backward) {
-    left_motor += base_strength
-    right_motor += base_strength
-  } else if (backward && !forward) {
-    left_motor -= base_strength
-    right_motor -= base_strength
-  }
-  
-  // Left/right rotation (can combine with forward/backward)
-  if (left && !right) {
-    left_motor -= base_strength * 0.6  // Reduce left motor for left turn
-    right_motor += base_strength * 0.6  // Increase right motor for left turn
-  } else if (right && !left) {
-    left_motor += base_strength * 0.6  // Increase left motor for right turn
-    right_motor -= base_strength * 0.6  // Reduce right motor for right turn
-  }
-  
-  // Limit motor values
-  left_motor = Math.max(-200, Math.min(200, left_motor))
-  right_motor = Math.max(-200, Math.min(200, right_motor))
-  
-  // Send to motors (this will go through server speed adjustment like joystick)
-  setMotors(Math.round(left_motor), Math.round(right_motor))
-}
-
-function initRecordingButton() {
-  $("#record-btn").on("click", function(e) {
-    e.preventDefault()
-    if (!is_recording) {
-      // Start recording
-      $.ajax({url: "start_recording"}).done(function() {
-        is_recording = true
-        $("#record-btn").html("⏹️ Stop Recording")
-        $("#record-btn").css("background-color", "#ff4444")
-      })
-    } else {
-      // Stop recording
-      $.ajax({url: "stop_recording"}).done(function() {
-        is_recording = false
-        $("#record-btn").html("🔴 Start Recording")
-        $("#record-btn").css("background-color", "")
-      })
-    }
-  })
 }

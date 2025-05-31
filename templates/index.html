@@ -7,123 +7,233 @@
 <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
 <script src="static/script.js?8"></script>
 
-<title>Raspberry Pi Robot Control Panel</title>
+<title>Robot Control Panel</title>
 </head>
 
 <body onload="init();">
 
 <div id="container">
 
-<h1>Raspberry Pi Robot Control Panel</h1>
-
-<p><a href="/halt" onClick="return shutdown()">Shutdown...</a></p>
-
-<!-- Speed Controls -->
-<div class="control-section">
-  <h2>Speed Level</h2>
-  <div class="button-row">
-    <button id="slow-btn" class="speed-btn">Slow</button>
-    <button id="moderate-btn" class="speed-btn">Moderate</button>
-    <button id="fast-btn" class="speed-btn speed-active">Fast</button>
-  </div>
+<!-- Top Controls: Record Left, Pause Center, Shutdown Right -->
+<div class="top-controls">
+  <button id="record-btn" class="top-btn left">Start Recording</button>
+  <button id="pause-btn" class="top-btn center">PAUSE</button>
+  <a href="/halt" onClick="return shutdown()" class="top-btn right">Shutdown</a>
 </div>
 
-<!-- Recording Controls -->
+<!-- Arm Controls -->
 <div class="control-section">
-  <h2>Recording</h2>
-  <div class="button-row">
-    <button id="record-btn" class="control-btn">🔴 Start Recording</button>
+  
+  <!-- Preset Positions -->
+  <div class="preset-row">
+    <button id="servo-home-btn" class="preset-btn">Home</button>
+    <button id="servo-capture-btn" class="preset-btn">Capture</button>
+    <button id="servo-grip-btn" class="preset-btn">Grip</button>
+    <button id="servo-lift-btn" class="preset-btn">Lift</button>
+    <button id="servo-park-btn" class="preset-btn">Park</button>
   </div>
-</div>
-
-<!-- Servo Controls -->
-<div class="control-section">
-  <h2>Servo Control</h2>
-  <div class="button-row">
-    <button id="servo-home-btn" class="servo-btn">Home</button>
-    <button id="servo-capture-btn" class="servo-btn">Capture</button>
-    <button id="servo-grip-btn" class="servo-btn">Grip</button>
-    <button id="servo-lift-btn" class="servo-btn">Lift</button>
-    <button id="servo-park-btn" class="servo-btn">Park</button>
-  </div>
-</div>
-
-<table>
-<tr>
-<th>Buttons</th>
-<td class="center" id="button0"></td>
-<td class="center" id="button1"></td>
-<td class="center" id="button2"></td>
-</tr>
-
-<tr><th>LEDs</th>
-<td class="center"><input type="checkbox" id="led0" onchange="setLeds()"></td>
-<td class="center"><input type="checkbox" id="led1" onchange="setLeds()"></td>
-<td class="center"><input type="checkbox" id="led2" onchange="setLeds()"></td>
-</tr>
-</table>
-
-<!-- Movement Buttons -->
-<div class="control-section">
-  <h2>Movement Controls</h2>
-  <div class="movement-grid">
-    <div class="row">
-      <div></div>
-      <button id="forward-btn" class="control-btn">↑</button>
-      <div></div>
+  
+  <!-- Manual Control Sliders -->
+  <div class="servo-sliders">
+    
+    <!-- Lift Servo Slider -->
+    <div class="slider-group">
+      <div class="slider-header">
+        <label>Lift:</label>
+      </div>
+      
+      <div class="slider-container">
+        <div class="slider-current-value" id="liftCurrentValue" style="left: 61%;">1550μs</div>
+        
+        <input type="range" 
+               id="liftSlider" 
+               class="minimal-slider"
+               min="1000" 
+               max="1900" 
+               value="1550" 
+               oninput="updateSliderValue('lift', this.value); setServoPWM('lift', this.value)">
+        
+        <div class="slider-labels">
+          <span class="slider-label">Up</span>
+          <span class="slider-label">Mid</span>
+          <span class="slider-label">Down</span>
+        </div>
+      </div>
     </div>
-    <div class="row">
-      <button id="left-btn" class="control-btn">⟲</button>
-      <div></div>
-      <button id="right-btn" class="control-btn">⟳</button>
+    
+    <!-- Tilt Servo Slider -->
+    <div class="slider-group">
+      <div class="slider-header">
+        <label>Tilt:</label>
+      </div>
+      
+      <div class="slider-container">
+        <div class="slider-current-value" id="tiltCurrentValue" style="left: 44%;">1500μs</div>
+        
+        <input type="range" 
+               id="tiltSlider" 
+               class="minimal-slider"
+               min="1300" 
+               max="1750" 
+               value="1500"
+               oninput="updateSliderValue('tilt', this.value); setServoPWM('tilt', this.value)">
+        
+        <div class="slider-labels">
+          <span class="slider-label">Down</span>
+          <span class="slider-label">Flat</span>
+          <span class="slider-label">Up</span>
+        </div>
+      </div>
     </div>
-    <div class="row">
-      <div></div>
-      <button id="backward-btn" class="control-btn">↓</button>
-      <div></div>
+    
+    <!-- Gripper Servo Slider -->
+    <div class="slider-group">
+      <div class="slider-header">
+        <label>Gripper:</label>
+      </div>
+      
+      <div class="slider-container">
+        <div class="slider-current-value" id="gripperCurrentValue" style="left: 0%;">500μs</div>
+        
+        <input type="range" 
+               id="gripperSlider" 
+               class="minimal-slider"
+               min="500" 
+               max="2330" 
+               value="500"
+               oninput="updateSliderValue('gripper', this.value); setServoPWM('gripper', this.value)">
+        
+        <div class="slider-labels">
+          <span class="slider-label">Open</span>
+          <span class="slider-label">Semi</span>
+          <span class="slider-label">Close</span>
+        </div>
+      </div>
     </div>
+    
   </div>
 </div>
 
-<p>
-<input type="text" id="notes" maxlength="14" value="l16ceg>c">
-<button onclick="playNotes()">Play</button>
-</p>
+<!-- Movement Controls -->
+<div class="control-section">
+  <div class="movement-control-area">
+    
+    <!-- Left Side: Speed + Direction Controls -->
+    <div class="left-controls">
+      <!-- Speed Controls -->
+      <div class="speed-controls">
+        <button id="slow-btn" class="speed-btn">Slow</button>
+        <button id="moderate-btn" class="speed-btn">Moderate</button>
+        <button id="fast-btn" class="speed-btn speed-active">Fast</button>
+      </div>
+      
+      <!-- Direction Controls -->
+      <div class="direction-controls">
+        <div class="direction-row">
+          <div></div>
+          <button id="forward-btn" class="movement-btn">↑</button>
+          <div></div>
+        </div>
+        <div class="direction-row">
+          <button id="left-btn" class="movement-btn">←</button>
+          <div></div>
+          <button id="right-btn" class="movement-btn">→</button>
+        </div>
+        <div class="direction-row">
+          <div></div>
+          <button id="backward-btn" class="movement-btn">↓</button>
+          <div></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Right Side: Joystick -->
+    <div class="joystick-area">
+      <div class="motor-display" id="motor-display">Motors: 0 0</div>
+      <div id="joystick">
+        <!-- Reference lines and circle -->
+        <div class="joystick-guides">
+          <div class="guide-line horizontal"></div>
+          <div class="guide-line vertical"></div>
+          <div class="guide-circle"></div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+</div>
 
-<table>
-<tr><th>Battery</th><td class="wide"><span id="battery_millivolts"></span> mV</td></tr>
-</table>
-
-<table>
-<tr>
-<th rowspan=2>Analog</th>
-<td id="analog0"></td><td id="analog1"></td><td id="analog2"></td>
-</tr>
-<tr>
-<td id="analog3"></td>
-<td id="analog4"></td><td id="analog5"></td>
-</tr>
-</table>
-
-<table>
-<tr>
-<th rowspan=2>Encoders (Romi&nbsp;only)</th>
-<td id="encoders0"></td><td id="encoders1"></td>
-</tr>
-</table>
-
-<!-- Servo Status -->
-<table>
-<tr>
-<th>Servo Status</th>
-<td>Position: <span id="servo-position">-</span></td>
-<td>Enabled: <span id="servo-enabled">-</span></td>
-</tr>
-</table>
-
-<div id="joystick">
+<!-- Bottom Controls: LEDs & Play + Readings -->
+<div class="bottom-controls">
+  
+  <!-- LED and Play Controls (Left) -->
+  <div class="led-play-section">
+    <div class="led-controls">
+      <strong>LEDs:</strong>
+      <input type="checkbox" id="led0" onchange="setLeds()">
+      <input type="checkbox" id="led1" onchange="setLeds()">
+      <input type="checkbox" id="led2" onchange="setLeds()">
+    </div>
+    
+    <div class="play-controls">
+      <input type="text" id="notes" maxlength="14" value="l16ceg>c">
+      <button onclick="playNotes()">Play</button>
+    </div>
+  </div>
+  
+  <!-- Compact Readings (Right) -->
+  <div class="readings-section">
+    
+    <div class="readings-row">
+      <div class="reading-item">
+        <strong>Buttons:</strong>
+        <div class="reading-values">
+          <span id="button0">0</span>
+          <span id="button1">0</span>
+          <span id="button2">0</span>
+        </div>
+      </div>
+      
+      <div class="reading-item">
+        <strong>Battery:</strong>
+        <span id="battery_millivolts">----</span>mV
+      </div>
+    </div>
+    
+    <div class="readings-row">
+      <div class="reading-item">
+        <strong>Analog:</strong>
+        <div class="reading-values">
+          <span id="analog0">0</span>
+          <span id="analog1">0</span>
+          <span id="analog2">0</span>
+          <span id="analog3">0</span>
+          <span id="analog4">0</span>
+          <span id="analog5">0</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="readings-row">
+      <div class="reading-item">
+        <strong>Encoders:</strong>
+        <div class="reading-values">
+          <span id="encoders0">0</span>
+          <span id="encoders1">0</span>
+        </div>
+      </div>
+      
+      <div class="reading-item">
+        <strong>Servo:</strong>
+        P:<span id="servo-position">-</span> E:<span id="servo-enabled">-</span>
+      </div>
+    </div>
+    
+  </div>
+  
 </div>
 
 </div>
 
+</body>
 </html>

@@ -25,13 +25,36 @@ led0_state = False
 led1_state = False
 led2_state = False
 current_speed = "fast"  # Default speed level
+paused = False  # Global pause state
 
 @app.route("/")
 def hello():
     return render_template("index.html")
 
+# ========== PAUSE/RESUME CONTROL ==========
+
+@app.route("/pause")
+def set_pause():
+    global paused
+    paused = True
+    a_star.motors(0, 0)  # 立即停止电机
+    a_star.servo_disable()  # 禁用伺服器
+    return ""
+
+@app.route("/resume") 
+def set_resume():
+    global paused
+    paused = False
+    return ""
+
+# ========== MOTOR CONTROL WITH PAUSE CHECK ==========
+
 @app.route("/motors/<left>,<right>")
 def motors(left, right):
+    # If paused, force motors to stop
+    if paused:
+        left, right = 0, 0
+        
     # Apply speed factor to motor commands from joystick
     if current_speed == "slow":
         factor = robot_control.SPEED_SLOW
@@ -53,15 +76,18 @@ def set_speed(level):
         robot_control.set_speed(level)
     return ""
 
-# Button control routes
+# ========== MOVEMENT CONTROL WITH PAUSE CHECK ==========
+
 @app.route("/move_forward")
 def move_forward():
-    robot_control.move_forward()
+    if not paused:
+        robot_control.move_forward()
     return ""
 
 @app.route("/move_backward")
 def move_backward():
-    robot_control.move_backward()
+    if not paused:
+        robot_control.move_backward()
     return ""
 
 @app.route("/stop_movement")
@@ -71,38 +97,47 @@ def stop_movement():
 
 @app.route("/rotate_left")
 def rotate_left():
-    robot_control.rotate_left_continuous()
+    if not paused:
+        robot_control.rotate_left_continuous()
     return ""
 
 @app.route("/rotate_right")
 def rotate_right():
-    robot_control.rotate_right_continuous()
+    if not paused:
+        robot_control.rotate_right_continuous()
     return ""
 
 @app.route("/rotate_left_45")
 def rotate_left_45():
-    robot_control.rotate_left_45()
+    if not paused:
+        robot_control.rotate_left_45()
     return ""
 
 @app.route("/rotate_left_90")
 def rotate_left_90():
-    robot_control.rotate_left_90()
+    if not paused:
+        robot_control.rotate_left_90()
     return ""
 
 @app.route("/rotate_right_45")
 def rotate_right_45():
-    robot_control.rotate_right_45()
+    if not paused:
+        robot_control.rotate_right_45()
     return ""
 
 @app.route("/rotate_right_90")
 def rotate_right_90():
-    robot_control.rotate_right_90()
+    if not paused:
+        robot_control.rotate_right_90()
     return ""
 
 @app.route("/rotate_180")
 def rotate_180():
-    robot_control.rotate_180()
+    if not paused:
+        robot_control.rotate_180()
     return ""
+
+# ========== LED AND BUZZER CONTROL (NOT AFFECTED BY PAUSE) ==========
 
 @app.route("/leds/<int:led0>,<int:led1>,<int:led2>")
 def leds(led0, led1, led2):
@@ -128,6 +163,8 @@ def play_notes(notes):
     a_star.play_notes(notes)
     return ""
 
+# ========== SYSTEM CONTROL ==========
+
 @app.route("/halt")
 def halt():
     call(["bash", "-c", "(sleep 2; sudo halt)&"])
@@ -147,13 +184,13 @@ def stop_recording():
     recording_control.stop_recording()
     return ""
 
-
-# ========== SERVO POSITION CONTROL ROUTES ==========
+# ========== SERVO POSITION CONTROL WITH PAUSE CHECK ==========
 
 @app.route("/servo/enable")
 def servo_enable():
     """Enable servo control"""
-    a_star.servo_enable(True)
+    if not paused:
+        a_star.servo_enable(True)
     return ""
 
 @app.route("/servo/disable") 
@@ -165,49 +202,75 @@ def servo_disable():
 @app.route("/servo/home")
 def servo_home():
     """Move to home position (mid, flat, open)"""
-    a_star.servo_home()
+    if not paused:
+        a_star.servo_home()
     return ""
 
 @app.route("/servo/hold")
 def servo_hold():
     """Move to hold position (mid, flat, close)"""
-    a_star.servo_hold()
+    if not paused:
+        a_star.servo_hold()
     return ""
 
 @app.route("/servo/lift")
 def servo_lift():
     """Move to lift position (up, up, close)"""
-    a_star.servo_lift()
+    if not paused:
+        a_star.servo_lift()
     return ""
 
 @app.route("/servo/grip")
 def servo_grip():
     """Move to grip position (down, down, close)"""
-    a_star.servo_grip()
+    if not paused:
+        a_star.servo_grip()
     return ""
 
 @app.route("/servo/capture")
 def servo_capture():
     """Move to capture position (down, down, open)"""
-    a_star.servo_capture()
+    if not paused:
+        a_star.servo_capture()
     return ""
 
 @app.route("/servo/park")
 def servo_park():
     """Park servos (home then disable)"""
-    a_star.servo_park()
+    if not paused:
+        a_star.servo_park()
     return ""
 
-# Also update the status.json route to include servo info:
+@app.route("/servo/pwm/<servo>/<int:value>")
+def servo_set_pwm(servo, value):
+    """设置单个servo的PWM值"""
+    if not paused:
+        if servo == "lift":
+            a_star.servo_set_lift_pwm(value)
+        elif servo == "tilt":
+            a_star.servo_set_tilt_pwm(value)
+        elif servo == "gripper":
+            a_star.servo_set_gripper_pwm(value)
+        else:
+            return "Invalid servo name", 400
+    return ""
+
+@app.route("/servo/pwm_values.json")
+def get_servo_pwm_values():
+    """get current pwm values for all servos"""
+    pwm_values = a_star.servo_get_pwm_values()
+    return json.dumps(pwm_values)
+
+# ========== STATUS REPORTING WITH PAUSE STATE ==========
+
 @app.route("/status.json")
 def status():
     buttons = a_star.read_buttons()
     analog = a_star.read_analog()
     battery_millivolts = a_star.read_battery_millivolts()
     encoders = a_star.read_encoders()
-    
-    # Add servo status
     servo_status = a_star.read_servo_status()
+    servo_pwm = a_star.servo_get_pwm_values()
     
     data = {
         "buttons": buttons,
@@ -215,7 +278,9 @@ def status():
         "analog": analog,
         "encoders": encoders,
         "speed_level": current_speed,
-        "servo_status": servo_status
+        "servo_status": servo_status,
+        "servo_pwm": servo_pwm,
+        "paused": paused  # Add pause state to status
     }
     return json.dumps(data)
 
