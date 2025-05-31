@@ -14,12 +14,12 @@
 
 // Servo objects with tested parameters
 Servo liftServo;    // Pin 21, max-1900-down, min-1000-up, mid-1550-mid
-Servo tiltServo;    // Pin 22, max-1750-up, min-1300-down, mid-1500-flat
+Servo tiltServo;    // Pin 22, max-1890-up, min-1210-down, mid-1500-flat
 Servo gripperServo; // Pin 11, max-2330-close, min-500-open, mid-1440-semiopen
 
 // Servo limits (from testing)
 const int LIFT_MIN = 1000, LIFT_MAX = 1900, LIFT_MID = 1550;
-const int TILT_MIN = 1300, TILT_MAX = 1750, TILT_MID = 1500;
+const int TILT_MIN = 1210, TILT_MAX = 1890, TILT_MID = 1500;
 const int GRIPPER_MIN = 500, GRIPPER_MAX = 2330, GRIPPER_MID = 1440;
 
 // Preset positions
@@ -336,7 +336,7 @@ void moveToPosition(uint8_t position) {
       
     case LIFT:
       currentLiftPulse = LIFT_MIN;      // 1000
-      currentTiltPulse = TILT_MAX;      // 1750
+      currentTiltPulse = TILT_MAX;      // 1890
       currentGripperPulse = GRIPPER_MAX; // 2330
       buzzer.play("!e64");
       Serial.println("Moving to LIFT");
@@ -344,7 +344,7 @@ void moveToPosition(uint8_t position) {
       
     case GRIP:
       currentLiftPulse = LIFT_MAX;      // 1900
-      currentTiltPulse = TILT_MIN;      // 1300
+      currentTiltPulse = TILT_MIN;      // 1210
       currentGripperPulse = GRIPPER_MAX; // 2330
       buzzer.play("!f64");
       Serial.println("Moving to GRIP");
@@ -352,7 +352,7 @@ void moveToPosition(uint8_t position) {
       
     case CAPTURE:
       currentLiftPulse = LIFT_MAX;      // 1900
-      currentTiltPulse = TILT_MIN;      // 1300
+      currentTiltPulse = TILT_MIN;      // 1210
       currentGripperPulse = GRIPPER_MIN; // 500
       buzzer.play("!g64");
       Serial.println("Moving to CAPTURE");

@@ -36,78 +36,83 @@
   <!-- Manual Control Sliders -->
   <div class="servo-sliders">
     
-    <!-- Lift Servo Slider -->
-    <div class="slider-group">
+    <!-- Lift Servo Slider - Vertical (FIXED: Up at top, Down at bottom, centered) -->
+    <div class="slider-group vertical">
       <div class="slider-header">
         <label>Lift:</label>
+        <span class="slider-value"><span id="liftValue">1550</span>μs</span>
       </div>
       
-      <div class="slider-container">
-        <div class="slider-current-value" id="liftCurrentValue" style="left: 61%;">1550μs</div>
+      <div class="vertical-slider-container">
+        <div class="vertical-labels">
+          <span class="vertical-label top">Up</span>
+          <span class="vertical-label middle">Mid</span>
+          <span class="vertical-label bottom">Down</span>
+        </div>
         
         <input type="range" 
                id="liftSlider" 
-               class="minimal-slider"
+               class="vertical-slider"
                min="1000" 
                max="1900" 
                value="1550" 
-               oninput="updateSliderValue('lift', this.value); setServoPWM('lift', this.value)">
-        
-        <div class="slider-labels">
-          <span class="slider-label">Up</span>
-          <span class="slider-label">Mid</span>
-          <span class="slider-label">Down</span>
-        </div>
+               oninput="updateSliderValue('lift', this.value); setServoPWM('lift', this.value)"
+               style="transform: rotate(-90deg) scaleX(-1);"><!-- 额外翻转使Up在顶部 -->
       </div>
     </div>
     
-    <!-- Tilt Servo Slider -->
-    <div class="slider-group">
+    <!-- Tilt Servo Slider - Semicircle Arc (FIXED: Centered 1/4 arc) -->
+    <div class="slider-group arc">
       <div class="slider-header">
         <label>Tilt:</label>
+        <span class="slider-value"><span id="tiltValue">1500</span>μs</span>
       </div>
       
-      <div class="slider-container">
-        <div class="slider-current-value" id="tiltCurrentValue" style="left: 44%;">1500μs</div>
+      <div class="arc-slider-container">
+        <div class="arc-background">
+          <div class="arc-labels">
+            <span class="arc-label up">Up</span>
+            <span class="arc-label forward">Forward</span>
+          </div>
+          <div class="arc-indicator" id="tiltIndicator"></div>
+        </div>
         
         <input type="range" 
                id="tiltSlider" 
-               class="minimal-slider"
-               min="1300" 
-               max="1750" 
+               class="arc-slider"
+               min="1210" 
+               max="1890" 
                value="1500"
                oninput="updateSliderValue('tilt', this.value); setServoPWM('tilt', this.value)">
-        
-        <div class="slider-labels">
-          <span class="slider-label">Down</span>
-          <span class="slider-label">Flat</span>
-          <span class="slider-label">Up</span>
-        </div>
       </div>
     </div>
     
-    <!-- Gripper Servo Slider -->
-    <div class="slider-group">
+    <!-- Gripper Servo Slider - Horizontal Claw (FIXED: Close on left, Open on right) -->
+    <div class="slider-group gripper">
       <div class="slider-header">
         <label>Gripper:</label>
+        <span class="slider-value"><span id="gripperValue">500</span>μs</span>
       </div>
       
-      <div class="slider-container">
-        <div class="slider-current-value" id="gripperCurrentValue" style="left: 0%;">500μs</div>
+      <div class="gripper-slider-container">
+        <div class="gripper-visual">
+          <div class="claw left-claw" id="leftClaw">[</div>
+          <div class="claw right-claw" id="rightClaw">]</div>
+        </div>
+        
+        <div class="gripper-labels">
+          <span class="gripper-label">Close</span>
+          <span class="gripper-label">Semi</span>
+          <span class="gripper-label">Open</span>
+        </div>
         
         <input type="range" 
                id="gripperSlider" 
-               class="minimal-slider"
+               class="gripper-slider"
                min="500" 
                max="2330" 
                value="500"
                oninput="updateSliderValue('gripper', this.value); setServoPWM('gripper', this.value)">
-        
-        <div class="slider-labels">
-          <span class="slider-label">Open</span>
-          <span class="slider-label">Semi</span>
-          <span class="slider-label">Close</span>
-        </div>
       </div>
     </div>
     

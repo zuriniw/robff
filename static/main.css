@@ -1,18 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Mono:wght@100..900&display=swap');
+
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  overscroll-behavior: none;
+}
 html {
   font-family: sans-serif;
   margin: 0;
   padding: 0;
   text-align: center;
+  /* 移动端优化 */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 body {
   margin: 0;
   padding: 0;
   background: #fafafa;
+  /* 移动端优化 */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  position: relative;
 }
 
 input, button {
   font-size: 1rem;
+  font-family: 'Noto Sans Mono', monospace;
+  font-weight: 400;
 }
 
 #container {
@@ -39,7 +68,8 @@ input, button {
   border-radius: 8px;
   background: #fff;
   color: #333;
-  font-weight: bold;
+  font-weight: 400; /* 不加粗 */
+  font-family: 'Noto Sans Mono', monospace;
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
@@ -70,8 +100,8 @@ input, button {
 /* ============================================================================ */
 
 .control-section {
-  margin: 2em 0;
-  padding: 1em;
+  margin: 1.5em 0; /* 从2em减小到1.5em */
+  padding: 0.8em; /* 从1em减小到0.8em */
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #fff;
@@ -84,21 +114,22 @@ input, button {
 .preset-row {
   display: flex;
   justify-content: center;
-  gap: 1.5em;
-  margin-bottom: 2em;
+  gap: 1.2em; /* 从1.5em减小到1.2em */
+  margin-bottom: 1.5em; /* 从2em减小到1.5em */
   flex-wrap: wrap;
 }
 
 .preset-btn {
-  padding: 12px 24px;
+  padding: 8px 16px; /* 从12px 24px减小到8px 16px */
   border: 2px solid #ccc;
   border-radius: 8px;
   background: #fff;
   color: #333;
   cursor: pointer;
   font-size: 0.9rem;
-  font-weight: bold;
-  min-width: 80px;
+  font-weight: 400; /* 不加粗 */
+  font-family: 'Noto Sans Mono', monospace;
+  min-width: 60px; /* 从80px减小到60px */
 }
 
 .preset-btn:hover {
@@ -111,97 +142,262 @@ input, button {
 }
 
 /* ============================================================================ */
-/* MINIMAL SLIDERS */
+/* INTUITIVE SERVO SLIDERS */
 /* ============================================================================ */
 
 .servo-sliders {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5em;
+  justify-content: space-around;
+  align-items: flex-start;
+  gap: 2em;
+  margin-top: 4px; /* 从20px减少到4px，上移16px */
+  flex-wrap: wrap;
 }
 
 .slider-group {
-  width: 100%;
-  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
 }
 
 .slider-header {
-  margin-bottom: 8px;
+  margin-bottom: 20px;
+  text-align: center;
 }
 
 .slider-header label {
-  font-weight: bold;
+  font-weight: 400; /* 不加粗 */
   font-size: 0.9rem;
   color: #555;
+  display: block;
+  margin-bottom: 5px;
 }
 
-.slider-container {
-  position: relative;
-  width: 100%;
+.slider-value {
+  font-size: 0.8rem;
+  color: #666;
 }
 
-/* Minimal current value display */
-.slider-current-value {
-  position: absolute;
-  top: -20px;
-  transform: translateX(-50%);
-  background: #666;
-  color: white;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: bold;
-  white-space: nowrap;
-  z-index: 10;
-  pointer-events: none;
+/* ============================================================================ */
+/* VERTICAL LIFT SLIDER - CENTERED AND UNIFIED STYLE */
+/* ============================================================================ */
+
+.slider-group.vertical {
+  height: 200px;
 }
 
-/* Minimal slider styling */
-.minimal-slider {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: #e0e0e0;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-}
-
-.minimal-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background: #666;
-  cursor: pointer;
-  border: none;
-}
-
-.minimal-slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background: #666;
-  cursor: pointer;
-  border: none;
-}
-
-/* Simple labels below slider */
-.slider-labels {
+.vertical-slider-container {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  height: 150px;
+  position: relative;
+  transform: translateY(-16px); /* 只移动slider容器 */
+}
+
+.vertical-labels {
+  position: absolute;
+  left: -30px;
+  display: none; /* 隐藏标签 */
+  flex-direction: column;
   justify-content: space-between;
-  margin-top: 8px;
+  height: 120px;
   font-size: 0.7rem;
   color: #888;
 }
 
-.slider-label {
+.vertical-label.top {
+  order: 1;
+}
+
+.vertical-label.middle {
+  order: 2;
+}
+
+.vertical-label.bottom {
+  order: 3;
+}
+
+/* ============================================================================ */
+/* UNIFIED SLIDER STYLES - SIMPLE FLAT DESIGN */
+/* ============================================================================ */
+
+/* Base slider styles for all sliders */
+.vertical-slider, .arc-slider, .gripper-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #eee; /* 无填充 */
+  border: 2px solid #ccc; /* 灰色边框 */
+  border-radius: 40px; /* 更粗的轨道圆角 */
+  outline: none;
+  cursor: pointer;
+}
+
+/* Slider thumb styles - unified for all */
+.vertical-slider::-webkit-slider-thumb,
+.arc-slider::-webkit-slider-thumb,
+.gripper-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px !important; /* 水平滑块：在滑动方向更瘦 */
+  height: 36px; /* 垂直方向保持粗 */
+  border-radius:20px; /* 圆角矩形 */
+  background: #a1a1a178;
+  border: 2px solid #999; /* 深灰色边框 */
+  cursor: pointer;
+  z-index: 20; /* 确保在轨道上方 */
+}
+
+/* Specific positioning for each slider type */
+.vertical-slider {
+  width: 140px;
+  height: 36px; /* 更粗的轨道 */
+  transform: rotate(-90deg) ;
+  transform-origin: center;
+}
+
+.arc-slider {
+  width: 140px;
+  height: 36px; /* 更粗的轨道 */
+}
+
+.gripper-slider {
+  width: 140px;
+  height: 36px; /* 更粗的轨道 */
+  transform: scaleX(-1);
+}
+
+/* ============================================================================ */
+/* QUARTER ARC TILT SLIDER - CENTERED 1/4 ARC WITH ALIGNED WIDTH */
+/* ============================================================================ */
+
+.slider-group.arc {
+  height: 140px;
+}
+
+.arc-slider-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  transform: translateY(-16px); /* 只移动slider和指针容器 */
+}
+
+.arc-background {
+  position: relative;
+  width: 120px;
+  height: 60px;
+  overflow: visible; /* 改为visible，防止指针被裁剪 */
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.arc-background::before {
+  display: none; /* 完全去除弧形 */
+}
+
+.arc-labels {
+  position: absolute;
+  width: 120px;
+  height: 60px;
   font-size: 0.7rem;
   color: #888;
+  display: none; /* 隐藏标签 */
 }
+
+.arc-label.up {
+  position: absolute;
+  left: 50%;
+  top: -15px;
+  transform: translateX(-50%);
+}
+
+.arc-label.forward {
+  position: absolute;
+  right: -25px;
+  bottom: 5px;
+}
+
+.arc-indicator {
+  position: absolute;
+  width: 2px;
+  height: 40px;
+  background: #666;
+  bottom: 0;
+  left: 50%;
+  transform-origin: bottom center;
+  transform: translateX(-50%) rotate(0deg);
+  transition: transform 0.2s ease;
+  z-index: 25;
+}
+
+/* 箭头三角形 */
+.arc-indicator::after {
+  content: '';
+  position: absolute;
+  top: -6px; /* 在指针顶端 */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-bottom: 8px solid #666; /* 向上的三角形 */
+}
+
+
+
+/* ============================================================================ */
+/* GRIPPER CLAW SLIDER - FIXED ORIENTATION */
+/* ============================================================================ */
+
+.slider-group.gripper {
+  height: 120px;
+}
+
+.gripper-slider-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.gripper-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0px;
+  height: 40px;
+  font-size: 2em;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.claw {
+  transition: transform 0.2s ease;
+}
+
+.left-claw {
+  transform: translateX(0px);
+}
+
+.right-claw {
+  transform: translateX(0px);
+}
+
+.gripper-labels {
+  display: none; /* 隐藏标签 */
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.7rem;
+  color: #888;
+  margin-bottom: 5px;
+}
+
+
 
 /* ============================================================================ */
 /* MOVEMENT CONTROLS - REDESIGNED LAYOUT */
@@ -283,6 +479,8 @@ input, button {
   background: #fff;
   cursor: pointer;
   font-size: 1.2em;
+  font-family: sans-serif; /* 使用原来的字体 */
+  font-weight: normal; /* 使用原来的字重 */
   display: flex;
   align-items: center;
   justify-content: center;

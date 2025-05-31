@@ -1,7 +1,7 @@
 #include <Servo.h>
 
 Servo liftServo;    // Pin 21, max-1900-down, min-1000-up, mid-1550-mid
-Servo tiltServo;    // Pin 22, max-1750-up, min-1300-down, mid-1500-flat
+Servo tiltServo;    // Pin 22, max-1890-up, min-1210-down, mid-1500-flat
 Servo gripperServo; // Pin 11, max-2330-close, min-500-open, mid-1440-semiopen
 
 bool servosAttached = true;
@@ -44,19 +44,19 @@ void loop() {
     else if (cmd == "lift" && servosAttached) {
       Serial.println("Moving to LIFT position...");
       liftServo.writeMicroseconds(1000);   // up
-      tiltServo.writeMicroseconds(1750);   // up
+      tiltServo.writeMicroseconds(1890);   // up
       gripperServo.writeMicroseconds(2330); // close
     }
     else if (cmd == "grip" && servosAttached) {
       Serial.println("Moving to GRIP position...");
       liftServo.writeMicroseconds(1900);   // down
-      tiltServo.writeMicroseconds(1300);   // down
+      tiltServo.writeMicroseconds(1210);   // down
       gripperServo.writeMicroseconds(2330); // close
     }
     else if (cmd == "capture" && servosAttached) {
       Serial.println("Moving to CAPTURE position...");
       liftServo.writeMicroseconds(1900);   // down
-      tiltServo.writeMicroseconds(1300);   // down
+      tiltServo.writeMicroseconds(1210);   // down
       gripperServo.writeMicroseconds(500); // open
     }
     else if (cmd == "stop") {

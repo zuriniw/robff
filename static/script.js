@@ -44,7 +44,12 @@ function init() {
   initKeyboardControls()
   initRecordingButton()
   initServoButtons()
-  initPauseButton()  // Add pause button initialization
+  initPauseButton()
+  
+  // 初始化UI状态，让可视化与slider值一致
+  updateSliderValue('lift', document.getElementById('liftSlider').value);
+  updateSliderValue('tilt', document.getElementById('tiltSlider').value);
+  updateSliderValue('gripper', document.getElementById('gripperSlider').value);
 }
 
 // ============================================================================
@@ -413,35 +418,61 @@ function servoPark() {
 }
 
 // ============================================================================
-// SERVO CONTROL - MANUAL PWM SLIDERS
+// SERVO CONTROL - MANUAL PWM SLIDERS (FIXED FUNCTIONS)
 // ============================================================================
 
 function updateSliderValue(servo, value) {
-    // 立即更新显示，不等待网络请求
+    // 立即更新显示值
     const valueElement = document.getElementById(servo + 'Value');
-    const currentValueElement = document.getElementById(servo + 'CurrentValue');
     
     if (valueElement) {
         valueElement.textContent = value;
     }
     
-    if (currentValueElement) {
-        currentValueElement.textContent = value + 'μs';
+    // 更新象形控制的视觉效果
+    switch(servo) {
+        case 'lift':
+            // Lift slider 是垂直的，但由于旋转，需要反转逻辑
+            // 高值应该对应向上，低值对应向下
+            break;
+            
+        case 'tilt':
+            // 更新弧形指示器的角度
+            updateTiltIndicator(value);
+            break;
+            
+        case 'gripper':
+            // 更新爪子的开合动画
+            updateGripperClaws(value);
+            break;
+    }
+}
+
+function updateTiltIndicator(value) {
+    const indicator = document.getElementById('tiltIndicator');
+    if (indicator) {
+        // FIXED: 1890(up)对应0度(12点钟)，1210(forward)对应90度(3点钟)
+        const percentage = (value - 1890) / (1210 - 1890);
+        const angle = 90 * percentage; // 0度(up)到90度(forward)
+        indicator.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+    }
+}
+
+function updateGripperClaws(value) {
+    const leftClaw = document.getElementById('leftClaw');
+    const rightClaw = document.getElementById('rightClaw');
+    
+    if (leftClaw && rightClaw) {
+        // 修正gripper逻辑：由于slider被水平翻转，需要反转计算
+        // 对于翻转的slider：实际的低值(500)在右边，高值(2330)在左边
+        // 但我们想要：左边=close，右边=open
+        // 所以需要反转value的映射
+        const reversedValue = 2330 + 500 - value; // 反转值
+        const percentage = (reversedValue - 500) / (2330 - 500);
+        const distance = 2 + (percentage * 18); // 从2px(close，更紧密)到20px(open)
         
-        // 计算并更新气泡位置
-        let percentage;
-        switch(servo) {
-            case 'lift':
-                percentage = ((value - 1000) / (1900 - 1000)) * 100;
-                break;
-            case 'tilt':
-                percentage = ((value - 1300) / (1750 - 1300)) * 100;
-                break;
-            case 'gripper':
-                percentage = ((value - 500) / (2330 - 500)) * 100;
-                break;
-        }
-        currentValueElement.style.left = percentage + '%';
+        leftClaw.style.transform = `translateX(-${distance}px)`;
+        rightClaw.style.transform = `translateX(${distance}px)`;
     }
 }
 
@@ -464,7 +495,7 @@ function updateSlidersFromPreset() {
       document.getElementById('tiltSlider').value = data.tilt;
       document.getElementById('gripperSlider').value = data.gripper;
       
-      // 更新显示和气泡位置
+      // 更新显示和视觉效果
       updateSliderValue('lift', data.lift);
       updateSliderValue('tilt', data.tilt);
       updateSliderValue('gripper', data.gripper);
