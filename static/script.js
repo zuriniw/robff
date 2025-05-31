@@ -353,6 +353,11 @@ function initServoButtons() {
     e.preventDefault()
     if (!is_paused) servoHome()
   })
+
+  $ ("#servo-hold-btn").on("click", function(e) {
+    e.preventDefault()
+    if (!is_paused) servoHold()
+  })
   
   $("#servo-capture-btn").on("click", function(e) {
     e.preventDefault()
