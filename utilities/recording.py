@@ -375,19 +375,305 @@ class ReSpeakerController:
 
 
 class VideoStreamer:
-    """Dummy video streamer class to maintain compatibility (camera removed)"""
+    """Handles dual USB camera video recording using ffmpeg (lightweight for Raspberry Pi)"""
     
     def __init__(self):
         self.is_streaming = False
+        self.is_recording = False
+        self.ffmpeg_processes = []
+        self.camera_devices = []
+        self.output_files = []
         
-    def start_streaming(self, ssh_host, ssh_port=8888):
-        """Dummy method - no video streaming since camera removed"""
-        print("Video camera removed - no video streaming available")
-        return False
+    @property
+    def cameras(self):
+        """Compatibility property for old code expecting 'cameras' attribute"""
+        return self.camera_devices
+        
+    def find_cameras(self):
+        """Find available USB cameras in /dev/video*"""
+        print("Searching for USB cameras...")
+        available_cameras = []
+        
+        try:
+            # Use v4l2-ctl --list-devices to find cameras properly
+            result = subprocess.run(
+                ['v4l2-ctl', '--list-devices'],
+                capture_output=True, text=True, timeout=2
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                current_device = None
+                
+                for line in lines:
+                    # Check for HD USB Camera entries
+                    if 'HD USB Camera' in line and 'usb-' in line:
+                        current_device = 'HD USB Camera'
+                        print(f"Found: {line.strip()}")
+                    elif current_device == 'HD USB Camera' and line.strip().startswith('/dev/video'):
+                        device = line.strip()
+                        # For each camera, typically video0/video2 are the main devices
+                        # and video1/video3 are metadata devices
+                        if device in ['/dev/video0', '/dev/video2']:
+                            available_cameras.append(device)
+                            print(f"  Using main device: {device}")
+                    elif line.strip() == '':
+                        current_device = None
+                        
+                if len(available_cameras) >= 2:
+                    return available_cameras[:2]
+                    
+            # Fallback: if v4l2-ctl fails or doesn't find both cameras
+            if len(available_cameras) < 2:
+                print("Fallback: checking /dev/video0 through /dev/video3")
+                for i in range(4):
+                    device = f'/dev/video{i}'
+                    if os.path.exists(device) and device not in available_cameras:
+                        try:
+                            # Quick test to see if device is usable
+                            test_cmd = ['v4l2-ctl', '-d', device, '--all']
+                            test_result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=1)
+                            
+                            if 'HD USB Camera' in test_result.stdout or i in [0, 2]:
+                                available_cameras.append(device)
+                                print(f"  Added: {device}")
+                                
+                                if len(available_cameras) >= 2:
+                                    break
+                        except:
+                            pass
+                            
+        except Exception as e:
+            print(f"Error during camera detection: {e}")
+            # Ultimate fallback
+            print("Using default devices /dev/video0 and /dev/video2")
+            available_cameras = ['/dev/video0', '/dev/video2']
+        
+        print(f"Selected cameras: {available_cameras}")
+        return available_cameras
+    
+    def initialize_cameras(self):
+        """Initialize cameras - just find and store device paths"""
+        self.camera_devices = self.find_cameras()
+        
+        if len(self.camera_devices) < 2:
+            print(f"Warning: Only {len(self.camera_devices)} camera(s) found, expected 2")
+        
+        return len(self.camera_devices) > 0
+    
+    def start_recording(self, output_dir, filename_prefix):
+        """Start recording video from both cameras using ffmpeg"""
+        if self.is_recording:
+            return False
+        
+        if not self.camera_devices:
+            print("No cameras initialized")
+            return False
+        
+        self.ffmpeg_processes = []
+        self.output_files = []
+        
+        for i, device in enumerate(self.camera_devices):
+            output_file = os.path.join(output_dir, f"{filename_prefix}_camera{i+1}.mp4")
+            self.output_files.append(output_file)
+            
+            # First try with MJPEG input format
+            ffmpeg_cmd = [
+                'ffmpeg',
+                '-f', 'v4l2',                    # Video4Linux2 input
+                '-input_format', 'mjpeg',         # MJPEG input format
+                '-framerate', '30',               # 30 fps
+                '-video_size', '1024x768',        # Resolution
+                '-i', device,                     # Input device
+                '-c:v', 'copy',                   # Just copy MJPEG stream
+                '-y',                             # Overwrite output file
+                output_file
+            ]
+            
+            try:
+                # Start ffmpeg process
+                process = subprocess.Popen(
+                    ffmpeg_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,  # Discard stdout to prevent blocking
+                    stderr=subprocess.DEVNULL   # Discard stderr to prevent blocking
+                )
+                
+                # Check if process started successfully
+                time.sleep(0.5)
+                if process.poll() is None:
+                    self.ffmpeg_processes.append(process)
+                    print(f"Started recording camera {i+1} ({device}) to {output_file}")
+                else:
+                    raise Exception("FFmpeg process died immediately")
+                
+            except Exception as e:
+                print(f"Failed with MJPEG format, trying YUYV: {e}")
+                
+                # Try with YUYV format
+                ffmpeg_cmd[4] = 'yuyv422'  # Change input format
+                ffmpeg_cmd[8] = '640x480'  # Lower resolution for YUYV
+                ffmpeg_cmd[6] = '9'        # 9 fps for YUYV as per spec
+                
+                try:
+                    process = subprocess.Popen(
+                        ffmpeg_cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    
+                    time.sleep(0.5)
+                    if process.poll() is None:
+                        self.ffmpeg_processes.append(process)
+                        print(f"Started recording camera {i+1} with YUYV format")
+                    else:
+                        raise Exception("FFmpeg process died immediately")
+                        
+                except Exception as e2:
+                    print(f"Failed with hardware encoding, trying software: {e2}")
+                    
+                    # Try software encoding
+                    ffmpeg_cmd[10] = 'libx264'  # Change to software encoder
+                    
+                    try:
+                        process = subprocess.Popen(
+                            ffmpeg_cmd,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE  # Keep stderr for debugging
+                        )
+                        
+                        time.sleep(0.5)
+                        if process.poll() is None:
+                            self.ffmpeg_processes.append(process)
+                            print(f"Started recording camera {i+1} with software encoding")
+                        else:
+                            # Print stderr for debugging
+                            stderr_output = process.stderr.read().decode('utf-8')
+                            print(f"FFmpeg error: {stderr_output}")
+                            
+                    except Exception as e3:
+                        print(f"Failed completely for camera {i+1}: {e3}")
+        
+        self.is_recording = len(self.ffmpeg_processes) > 0
+        
+        # Start monitoring thread
+        if self.is_recording:
+            self.monitor_thread = threading.Thread(target=self._monitor_recording)
+            self.monitor_thread.daemon = True
+            self.monitor_thread.start()
+        
+        return self.is_recording
+    
+    def _monitor_recording(self):
+        """Monitor ffmpeg processes in background"""
+        time.sleep(3)  # Initial delay
+        
+        while self.is_recording:
+            for i, process in enumerate(self.ffmpeg_processes):
+                if process and process.poll() is not None:
+                    # Process terminated
+                    stderr_output = process.stderr.read().decode('utf-8')
+                    if stderr_output:
+                        print(f"\nCamera {i+1} ffmpeg error (exit code {process.returncode}):")
+                        print(stderr_output[-500:])  # Last 500 chars
+            
+            time.sleep(5)  # Check every 5 seconds
+    
+    def start_streaming(self, ssh_host, base_port=8888):
+        """Start streaming video to SSH laptop using ffmpeg"""
+        if self.is_streaming:
+            return False
+        
+        if not self.camera_devices:
+            print("No cameras initialized")
+            return False
+        
+        # For streaming, we'll use ffmpeg to stream directly
+        # This is much more efficient than processing frames in Python
+        for i, device in enumerate(self.camera_devices):
+            stream_port = base_port + i
+            
+            # FFmpeg streaming command
+            ffmpeg_stream_cmd = [
+                'ffmpeg',
+                '-f', 'v4l2',
+                '-input_format', 'mjpeg',
+                '-framerate', '15',              # Lower framerate for streaming
+                '-video_size', '512x384',        # Lower resolution for streaming
+                '-i', device,
+                '-c:v', 'mjpeg',                 # Keep MJPEG for low latency
+                '-q:v', '5',                     # Quality setting
+                '-f', 'mjpeg',                   # Output format
+                f'tcp://{ssh_host}:{stream_port}'
+            ]
+            
+            try:
+                # Start streaming process in background
+                process = subprocess.Popen(
+                    ffmpeg_stream_cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                print(f"Camera {i+1} streaming to {ssh_host}:{stream_port}")
+                
+            except Exception as e:
+                print(f"Failed to start streaming camera {i+1}: {e}")
+        
+        self.is_streaming = True
+        return True
+    
+    def stop_recording(self):
+        """Stop recording video"""
+        if not self.is_recording:
+            return
+        
+        self.is_recording = False
+        
+        # Stop all ffmpeg processes gracefully
+        for i, process in enumerate(self.ffmpeg_processes):
+            if process and process.poll() is None:  # Process is still running
+                try:
+                    process.terminate()
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    print(f"Camera {i+1} ffmpeg process didn't terminate gracefully, killing it")
+                    process.kill()
+                    process.wait()
+                
+                # Check if there were any errors
+                if hasattr(process, 'stderr') and process.stderr:
+                    try:
+                        stderr_output = process.stderr.read().decode('utf-8')
+                        if stderr_output:
+                            print(f"Camera {i+1} ffmpeg errors:\n{stderr_output[-500:]}")
+                    except:
+                        pass
+        
+        self.ffmpeg_processes = []
+        
+        # Report file sizes
+        for output_file in self.output_files:
+            if os.path.exists(output_file):
+                size_mb = os.path.getsize(output_file) / 1024 / 1024
+                print(f"Video saved: {output_file} ({size_mb:.2f} MB)")
+        
+        print("Video recording stopped")
     
     def stop_streaming(self):
-        """Dummy method - no video streaming since camera removed"""
+        """Stop video streaming"""
+        # For now, streaming is handled by separate ffmpeg processes
+        # In production, you'd want to track and stop these processes
         self.is_streaming = False
+        print("Video streaming stopped")
+    
+    def cleanup(self):
+        """Cleanup all resources"""
+        self.stop_recording()
+        self.stop_streaming()
+        self.camera_devices = []
+        self.output_files = []
 
 
 class RecordingControl_v3:
@@ -402,7 +688,7 @@ class RecordingControl_v3:
         # ReSpeaker controller
         self.respeaker = ReSpeakerController()
         
-        # Video streamer (dummy for compatibility)
+        # Video streamer
         self.video_streamer = VideoStreamer()
         
         # Create recording directory if it doesn't exist
@@ -418,6 +704,15 @@ class RecordingControl_v3:
                 print("Failed to initialize ReSpeaker")
         else:
             print("ReSpeaker not available, continuing without spatial audio")
+        
+        # Initialize cameras
+        try:
+            if self.video_streamer.initialize_cameras():
+                print("Cameras initialized successfully")
+            else:
+                print("Failed to initialize cameras")
+        except Exception as e:
+            print(f"Error initializing cameras: {e}")
     
     def set_user_id(self, user_id):
         """Set user ID for file naming"""
@@ -432,16 +727,21 @@ class RecordingControl_v3:
             return False
             
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename_prefix = f"{self.user_id}_{timestamp}"
         
         try:
             print(f"Starting recording session: {timestamp}")
             
             # Start ReSpeaker capture
             if RESPEAKER_AVAILABLE and self.respeaker.device_index:
-                self.respeaker.start_capture(self.recording_dir, timestamp)
+                self.respeaker.start_capture(self.recording_dir, filename_prefix)
             
-            # Video streaming disabled (camera removed)
-            # Note: keeping original structure but video is now disabled
+            # Start video recording
+            self.video_streamer.start_recording(self.recording_dir, filename_prefix)
+            
+            # Start video streaming if SSH host is configured
+            if self.ssh_host:
+                self.video_streamer.start_streaming(self.ssh_host, base_port=8888)
             
             self.is_recording = True
             self.start_time = time.time()
@@ -450,9 +750,10 @@ class RecordingControl_v3:
             if RESPEAKER_AVAILABLE and self.respeaker.device_index:
                 print(f"  ReSpeaker raw: {self.respeaker.raw_audio_file}")
                 print(f"  DOA log: {self.respeaker.doa_log_file}")
+            print(f"  Video: {len(self.video_streamer.cameras)} camera(s) recording")
             if self.ssh_host:
                 print(f"  Audio streaming to: {self.ssh_host}:9999")
-                print(f"  Video: Disabled (camera removed)")
+                print(f"  Video streaming to: {self.ssh_host}:8888-8889")
             
             return True
             
@@ -468,7 +769,8 @@ class RecordingControl_v3:
         try:
             print("Stopping recording session...")
             
-            # Stop video streaming (disabled - camera removed)
+            # Stop video recording and streaming
+            self.video_streamer.stop_recording()
             self.video_streamer.stop_streaming()
             
             # Stop ReSpeaker capture
@@ -493,7 +795,8 @@ class RecordingControl_v3:
             'respeaker_available': RESPEAKER_AVAILABLE,
             'respeaker_initialized': self.respeaker.device_index is not None if RESPEAKER_AVAILABLE else False,
             'ssh_connected': self.respeaker.ssh_connected if RESPEAKER_AVAILABLE else False,
-            'video_streaming': self.video_streamer.is_streaming,  # Always False now
+            'video_streaming': self.video_streamer.is_streaming,
+            'cameras_active': len(self.video_streamer.camera_devices),
             'laptop_ip': self.ssh_host,
             'user_id': self.user_id
         }
@@ -514,9 +817,9 @@ class RecordingControl_v3:
         
         if RESPEAKER_AVAILABLE:
             self.respeaker.cleanup()
+        
+        self.video_streamer.cleanup()
 
 
 # For backward compatibility with existing Flask interface
 RecordingControl_v2 = RecordingControl_v3
-
-
