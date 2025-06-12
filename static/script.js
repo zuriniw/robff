@@ -24,6 +24,10 @@ let is_recording = false
 // Pause state
 let is_paused = false
 
+// ReSpeaker/Streaming state
+let user_id = "default"
+let respeaker_status = {}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -45,11 +49,84 @@ function init() {
   initRecordingButton()
   initServoButtons()
   initPauseButton()
+  initReSpeakerControls()
   
   // 初始化UI状态，让可视化与slider值一致
   updateSliderValue('lift', document.getElementById('liftSlider').value);
   updateSliderValue('tilt', document.getElementById('tiltSlider').value);
   updateSliderValue('gripper', document.getElementById('gripperSlider').value);
+}
+
+// ============================================================================
+// RESPEAKER AND STREAMING CONTROLS
+// ============================================================================
+
+function initReSpeakerControls() {
+  // The HTML already contains the user ID controls, so we just need to bind events
+  
+  // Set user ID button handler
+  $("#set-user-btn").on("click", function(e) {
+    e.preventDefault()
+    setUserID()
+  })
+  
+  // Enter key handler for user ID input
+  $("#user-id-input").on("keypress", function(e) {
+    if (e.which === 13) { // Enter key
+      setUserID()
+    }
+  })
+}
+
+function setUserID() {
+  const id = $("#user-id-input").val().trim()
+  
+  if (!id) {
+    alert("Please enter a valid user ID")
+    return
+  }
+  
+  // Validate user ID format (alphanumeric, dash, underscore only)
+  const userIdRegex = /^[a-zA-Z0-9_-]+$/
+  if (!userIdRegex.test(id)) {
+    alert("User ID can only contain letters, numbers, dashes, and underscores")
+    return
+  }
+  
+  console.log("Setting user ID to:", id)
+  
+  $.ajax({
+    url: "/set_user_id",
+    method: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({user_id: id}),
+    success: function(response) {
+      console.log("Server response:", response)
+      const result = JSON.parse(response)
+      if (result.success) {
+        // Update local state immediately
+        user_id = id
+        $("#current-user").text(id)
+        
+        console.log("User ID successfully set to:", id)
+        alert("User ID successfully set to: " + id)
+        
+        // Force multiple status refreshes to ensure update
+        setTimeout(() => $.ajax({url: "status.json"}).done(update_status), 50)
+        setTimeout(() => $.ajax({url: "status.json"}).done(update_status), 200)
+        setTimeout(() => $.ajax({url: "status.json"}).done(update_status), 500)
+        
+      } else {
+        alert("Failed to set User ID: " + result.message)
+      }
+    },
+    error: function(xhr, status, error) {
+      console.log("AJAX Error:", error)
+      console.log("Status:", status)
+      console.log("Response:", xhr.responseText)
+      alert("Error setting User ID. Check console for details.")
+    }
+  })
 }
 
 // ============================================================================
@@ -177,6 +254,11 @@ function initRotationButtons() {
 
 function initKeyboardControls() {
   $(document).on("keydown", function(e) {
+    // Skip keyboard controls if user is typing in an input field
+    if ($(e.target).is('input, textarea, select')) {
+      return;
+    }
+    
     let key = e.key.toLowerCase()
     if (key in keys_pressed && !keys_pressed[key]) {
       keys_pressed[key] = true
@@ -186,6 +268,11 @@ function initKeyboardControls() {
   })
   
   $(document).on("keyup", function(e) {
+    // Skip keyboard controls if user is typing in an input field
+    if ($(e.target).is('input, textarea, select')) {
+      return;
+    }
+    
     let key = e.key.toLowerCase()
     if (key in keys_pressed && keys_pressed[key]) {
       keys_pressed[key] = false
@@ -354,7 +441,7 @@ function initServoButtons() {
     if (!is_paused) servoHome()
   })
 
-  $ ("#servo-hold-btn").on("click", function(e) {
+  $("#servo-hold-btn").on("click", function(e) {
     e.preventDefault()
     if (!is_paused) servoHold()
   })
@@ -508,7 +595,7 @@ function updateSlidersFromPreset() {
 }
 
 // ============================================================================
-// RECORDING CONTROL
+// ENHANCED RECORDING CONTROL WITH RESPEAKER
 // ============================================================================
 
 function initRecordingButton() {
@@ -516,17 +603,33 @@ function initRecordingButton() {
     e.preventDefault()
     if (!is_recording) {
       // Start recording
-      $.ajax({url: "start_recording"}).done(function() {
-        is_recording = true
-        $("#record-btn").html("Stop Recording")
-        $("#record-btn").css("background-color", "#ff4444")
+      $.ajax({url: "start_recording"}).done(function(response) {
+        const result = JSON.parse(response)
+        if (result.success) {
+          is_recording = true
+          $("#record-btn").html("Stop Recording")
+          $("#record-btn").css("background-color", "#ff4444")
+          console.log("Recording started with ReSpeaker support")
+        } else {
+          alert("Failed to start recording")
+        }
+      }).fail(function() {
+        alert("Error starting recording")
       })
     } else {
       // Stop recording
-      $.ajax({url: "stop_recording"}).done(function() {
-        is_recording = false
-        $("#record-btn").html("Start Recording")
-        $("#record-btn").css("background-color", "")
+      $.ajax({url: "stop_recording"}).done(function(response) {
+        const result = JSON.parse(response)
+        if (result.success) {
+          is_recording = false
+          $("#record-btn").html("Start Recording")
+          $("#record-btn").css("background-color", "")
+          console.log("Recording stopped")
+        } else {
+          alert("Failed to stop recording")
+        }
+      }).fail(function() {
+        alert("Error stopping recording")
       })
     }
   })
@@ -603,7 +706,68 @@ function update_status(json) {
     }
   }
 
+  // Update ReSpeaker/Recording status
+  if (s["recording"]) {
+    respeaker_status = s["recording"]
+    updateReSpeakerDisplay(respeaker_status)
+    
+    // Sync recording state
+    if (s["recording"]["is_recording"] !== is_recording) {
+      is_recording = s["recording"]["is_recording"]
+      if (is_recording) {
+        $("#record-btn").html("Stop Recording")
+        $("#record-btn").css("background-color", "#ff4444")
+      } else {
+        $("#record-btn").html("Start Recording")
+        $("#record-btn").css("background-color", "")
+      }
+    }
+  }
+
+  // Update user ID from top-level status (this will override recording status)
+  if (s["user_id"] && !$("#user-id-input").is(':focus')) {
+    $("#current-user").text(s["user_id"])
+    $("#user-id-input").val(s["user_id"])
+    user_id = s["user_id"]
+  }
+
   setTimeout(poll, 100)
+}
+
+function updateReSpeakerDisplay(status) {
+  // Update ReSpeaker initialization status
+  if (status.respeaker_available && status.respeaker_initialized) {
+    $("#respeaker-init").text("Initialized").css("color", "green")
+  } else if (status.respeaker_available) {
+    $("#respeaker-init").text("Available, not initialized").css("color", "orange")
+  } else {
+    $("#respeaker-init").text("Not available").css("color", "red")
+  }
+  
+  // Update streaming status (always shows laptop IP since it's fixed)
+  if (status.ssh_connected && status.video_streaming) {
+    $("#streaming-status").text("Connected & Streaming to " + status.laptop_ip).css("color", "green")
+  } else {
+    $("#streaming-status").text("Ready to stream to " + status.laptop_ip).css("color", "orange")
+  }
+  
+  // Update current user ID - FIXED: Don't override input field when user is typing
+  if (status.user_id) {
+    $("#current-user").text(status.user_id)
+    user_id = status.user_id
+    
+    // Only update input if it's not currently focused (user not typing)
+    if (!$("#user-id-input").is(':focus')) {
+      $("#user-id-input").val(status.user_id)
+    }
+  }
+  
+  // Update current DOA
+  if (status.current_doa !== undefined && status.current_doa !== null) {
+    $("#current-doa").text(status.current_doa)
+  } else {
+    $("#current-doa").text("--")
+  }
 }
 
 // ============================================================================

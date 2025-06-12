@@ -2,256 +2,463 @@
 
 import subprocess
 import os
-from datetime import datetime
-import signal
-
-class RecordingControl_v1:
-    def __init__(self):
-        self.recording_dir = "/home/robff/robff/recordings"
-        self.video_process = None
-        self.audio_process = None
-        self.is_recording = False
-        
-        # Create recording directory if it doesn't exist
-        os.makedirs(self.recording_dir, exist_ok=True)
-    
-    def start_recording(self):
-        if self.is_recording:
-            return
-            
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        h264_file = os.path.join(self.recording_dir, f"video_{timestamp}.h264")
-        self.current_h264_file = h264_file
-        self.current_timestamp = timestamp
-        audio_file = os.path.join(self.recording_dir, f"audio_{timestamp}.wav")
-        
-        try:
-            # Record in H264 format
-            self.video_process = subprocess.Popen([
-                "libcamera-vid", "-t", "0", "-o", h264_file,
-                "--width", "1920", "--height", "1080", "--framerate", "30",
-                "--codec", "h264"
-            ])
-            
-            # Audio recording remains the same
-            self.audio_process = subprocess.Popen([
-                "arecord", "-D", "plughw:3,0", "-f", "cd", "-t", "wav", audio_file
-            ])
-            
-            self.is_recording = True
-            print(f"Recording started: {h264_file}, {audio_file}")
-            
-        except Exception as e:
-            print(f"Failed to start recording: {e}")
-            self.stop_recording()
-
-    def stop_recording(self):
-        if not self.is_recording:
-            return
-            
-        try:
-            if self.video_process:
-                self.video_process.terminate()
-                self.video_process.wait()
-                self.video_process = None
-                
-                # Convert H264 to MP4
-                mp4_file = os.path.join(self.recording_dir, f"video_{self.current_timestamp}.mp4")
-                subprocess.run([
-                    "ffmpeg", "-i", self.current_h264_file, "-c", "copy", mp4_file
-                ])
-                # Optionally remove the H264 file
-                os.remove(self.current_h264_file)
-                
-            if self.audio_process:
-                self.audio_process.terminate()
-                self.audio_process.wait()
-                self.audio_process = None
-                
-            self.is_recording = False
-            print("Recording stopped and converted to MP4")
-            
-        except Exception as e:
-            print(f"Error stopping recording: {e}")
-
-
-
-import subprocess
-import os
 import signal
 import time
 from datetime import datetime
 import threading
+import pyaudio
+import numpy as np
+import struct
+import socket
+import json
+import wave
+from pathlib import Path
+import sys
 
-class RecordingControl_v2:
+# Add ReSpeaker module path
+respeaker_path = "/home/robff/robff/usb_4_mic_array"
+if respeaker_path not in sys.path:
+    sys.path.append(respeaker_path)
+
+print(f"Added ReSpeaker path: {respeaker_path}")
+print(f"Python path: {sys.path}")
+
+# Import ReSpeaker modules
+try:
+    import usb.core
+    import usb.util
+    print("✅ USB modules imported")
+    
+    from tuning import Tuning
+    print("✅ Tuning module imported")
+    
+    RESPEAKER_AVAILABLE = True
+    print("✅ ReSpeaker modules loaded successfully")
+except ImportError as e:
+    print(f"❌ ReSpeaker import failed: {e}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Files in usb_4_mic_array: {os.listdir('/home/robff/robff/usb_4_mic_array') if os.path.exists('/home/robff/robff/usb_4_mic_array') else 'Directory not found'}")
+    RESPEAKER_AVAILABLE = False
+
+
+class ReSpeakerController:
+    """Handles ReSpeaker microphone array DOA and raw audio capture"""
+    
+    def __init__(self, channels=6, rate=16000, chunk_size=1024):
+        self.channels = channels
+        self.rate = rate
+        self.chunk_size = chunk_size
+        self.format = pyaudio.paInt16
+        
+        self.audio = None
+        self.stream = None
+        self.device_index = None
+        self.usb_device = None
+        self.tuning = None
+        
+        # Data storage
+        self.raw_audio_data = []
+        self.doa_data = []
+        self.is_capturing = False
+        
+        # SSH streaming
+        self.ssh_socket = None
+        self.ssh_connected = False
+        
+    def initialize(self):
+        """Initialize ReSpeaker hardware and audio interface"""
+        if not RESPEAKER_AVAILABLE:
+            return False
+            
+        try:
+            # Initialize PyAudio
+            self.audio = pyaudio.PyAudio()
+            
+            # Find ReSpeaker USB device for DOA - Updated to detect any USB port
+            self.usb_device = usb.core.find(idVendor=0x2886, idProduct=0x0018)
+            if self.usb_device:
+                self.tuning = Tuning(self.usb_device)
+                print(f"ReSpeaker USB device initialized for DOA on Bus {self.usb_device.bus:03d} Device {self.usb_device.address:03d}")
+            else:
+                print("Warning: ReSpeaker USB device not found for DOA")
+            
+            # Find ReSpeaker audio device - Enhanced detection
+            self.device_index = self._find_respeaker_audio_device()
+            if self.device_index is None:
+                print("Error: ReSpeaker audio device not found")
+                return False
+                
+            print(f"ReSpeaker audio device found at index: {self.device_index}")
+            return True
+            
+        except Exception as e:
+            print(f"Error initializing ReSpeaker: {e}")
+            return False
+    
+    def _find_respeaker_audio_device(self):
+        """Find ReSpeaker audio device index - Enhanced detection"""
+        if not self.audio:
+            return None
+            
+        print("Scanning for ReSpeaker audio devices...")
+        for i in range(self.audio.get_device_count()):
+            info = self.audio.get_device_info_by_index(i)
+            device_name = info['name'].lower()
+            print(f"  Device {i}: {info['name']} (channels: {info['maxInputChannels']})")
+            
+            # Enhanced detection patterns for ReSpeaker
+            respeaker_keywords = [
+                'respeaker', 
+                'arrayuac10', 
+                '2886:0018',
+                'seeed',
+                'mic array',
+                'uac1.0'
+            ]
+            
+            if any(keyword in device_name for keyword in respeaker_keywords):
+                # Additional validation: check if it has enough input channels
+                if info['maxInputChannels'] >= self.channels:
+                    print(f"Found ReSpeaker audio device: {info['name']}")
+                    return i
+                else:
+                    print(f"Found ReSpeaker device but insufficient channels: {info['maxInputChannels']} < {self.channels}")
+        
+        print("No suitable ReSpeaker audio device found")
+        return None
+    
+    def setup_ssh_streaming(self, ssh_host, ssh_port=9999):
+        """Setup SSH socket for streaming data to laptop"""
+        try:
+            self.ssh_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.ssh_socket.connect((ssh_host, ssh_port))
+            self.ssh_connected = True
+            print(f"Connected to SSH laptop at {ssh_host}:{ssh_port}")
+            return True
+        except Exception as e:
+            print(f"Failed to connect to SSH laptop: {e}")
+            self.ssh_connected = False
+            return False
+    
+    def start_capture(self, output_dir, filename_prefix):
+        """Start capturing raw audio and DOA data"""
+        if not self.device_index:
+            print("Error: ReSpeaker not initialized")
+            return False
+            
+        try:
+            # Setup audio stream
+            self.stream = self.audio.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                input_device_index=self.device_index,
+                frames_per_buffer=self.chunk_size
+            )
+            
+            # Setup output files with user ID prefix
+            self.raw_audio_file = os.path.join(output_dir, f"{filename_prefix}_respeaker_raw.wav")
+            self.doa_log_file = os.path.join(output_dir, f"{filename_prefix}_doa_log.json")
+            
+            # Initialize data storage
+            self.raw_audio_data = []
+            self.doa_data = []
+            self.is_capturing = True
+            
+            # Start capture thread
+            self.capture_thread = threading.Thread(target=self._capture_loop)
+            self.capture_thread.daemon = True
+            self.capture_thread.start()
+            
+            print("ReSpeaker capture started")
+            return True
+            
+        except Exception as e:
+            print(f"Error starting ReSpeaker capture: {e}")
+            return False
+    
+    def _capture_loop(self):
+        """Main capture loop for audio and DOA data"""
+        frame_count = 0
+        
+        while self.is_capturing:
+            try:
+                # Read audio data
+                audio_data = self.stream.read(self.chunk_size, exception_on_overflow=False)
+                timestamp = time.time()
+                
+                # Convert to numpy array for processing
+                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                audio_array = audio_array.reshape(-1, self.channels)
+                
+                # Store raw audio data
+                self.raw_audio_data.append(audio_data)
+                
+                # Get DOA every 10 frames to reduce processing load
+                doa_angle = None
+                if frame_count % 10 == 0 and self.tuning:
+                    try:
+                        doa_angle = self.tuning.direction
+                    except Exception as e:
+                        if frame_count % 100 == 0:  # Only print every 100 frames to avoid spam
+                            print(f"DOA read error: {e}")
+                
+                # Store DOA data
+                doa_entry = {
+                    'timestamp': timestamp,
+                    'frame': frame_count,
+                    'doa_angle': doa_angle,
+                    'audio_level': float(np.mean(np.abs(audio_array)))  # RMS level
+                }
+                self.doa_data.append(doa_entry)
+                
+                # Stream to SSH laptop if connected
+                if self.ssh_connected:
+                    self._stream_to_ssh(audio_array, doa_entry)
+                
+                frame_count += 1
+                
+            except Exception as e:
+                print(f"Capture loop error: {e}")
+                time.sleep(0.001)  # Brief pause on error
+    
+    def _stream_to_ssh(self, audio_array, doa_entry):
+        """Stream audio and DOA data to SSH laptop"""
+        try:
+            # Prepare data packet
+            packet = {
+                'type': 'respeaker_data',
+                'timestamp': doa_entry['timestamp'],
+                'doa_angle': doa_entry['doa_angle'],
+                'audio_level': doa_entry['audio_level'],
+                'audio_shape': audio_array.shape,
+                'audio_data': audio_array.tobytes().hex()  # Convert to hex string for JSON
+            }
+            
+            # Send as JSON
+            json_data = json.dumps(packet) + '\n'
+            self.ssh_socket.sendall(json_data.encode('utf-8'))
+            
+        except Exception as e:
+            print(f"SSH streaming error: {e}")
+            self.ssh_connected = False
+    
+    def get_current_doa(self):
+        """Get current DOA reading for status updates"""
+        if self.tuning and self.is_capturing:
+            try:
+                return self.tuning.direction
+            except:
+                return None
+        return None
+    
+    def stop_capture(self):
+        """Stop capturing and save data"""
+        if not self.is_capturing:
+            return
+            
+        self.is_capturing = False
+        
+        # Wait for capture thread to finish
+        if hasattr(self, 'capture_thread'):
+            self.capture_thread.join(timeout=2)
+        
+        # Stop audio stream
+        if self.stream:
+            self.stream.stop_stream()
+            self.stream.close()
+            self.stream = None
+        
+        # Save data
+        self._save_raw_audio()
+        self._save_doa_log()
+        
+        print("ReSpeaker capture stopped and data saved")
+    
+    def _save_raw_audio(self):
+        """Save raw audio data to WAV file"""
+        if not self.raw_audio_data:
+            return
+            
+        try:
+            with wave.open(self.raw_audio_file, 'wb') as wf:
+                wf.setnchannels(self.channels)
+                wf.setsampwidth(self.audio.get_sample_size(self.format))
+                wf.setframerate(self.rate)
+                wf.writeframes(b''.join(self.raw_audio_data))
+            
+            file_size = os.path.getsize(self.raw_audio_file) / 1024 / 1024
+            print(f"Raw audio saved: {self.raw_audio_file} ({file_size:.2f} MB)")
+            
+        except Exception as e:
+            print(f"Error saving raw audio: {e}")
+    
+    def _save_doa_log(self):
+        """Save DOA log to JSON file"""
+        if not self.doa_data:
+            return
+            
+        try:
+            with open(self.doa_log_file, 'w') as f:
+                json.dump(self.doa_data, f, indent=2)
+            
+            print(f"DOA log saved: {self.doa_log_file} ({len(self.doa_data)} entries)")
+            
+        except Exception as e:
+            print(f"Error saving DOA log: {e}")
+    
+    def cleanup(self):
+        """Cleanup resources"""
+        if self.stream:
+            self.stream.close()
+        if self.audio:
+            self.audio.terminate()
+        if self.ssh_socket:
+            self.ssh_socket.close()
+
+
+class VideoStreamer:
+    """Dummy video streamer class to maintain compatibility (camera removed)"""
+    
     def __init__(self):
+        self.is_streaming = False
+        
+    def start_streaming(self, ssh_host, ssh_port=8888):
+        """Dummy method - no video streaming since camera removed"""
+        print("Video camera removed - no video streaming available")
+        return False
+    
+    def stop_streaming(self):
+        """Dummy method - no video streaming since camera removed"""
+        self.is_streaming = False
+
+
+class RecordingControl_v3:
+    """Enhanced recording control that integrates with Flask web interface"""
+    
+    def __init__(self, ssh_host="172.20.10.4"):
         self.recording_dir = "/home/robff/robff/recordings"
-        self.video_process = None
-        self.audio_process = None
         self.is_recording = False
+        self.ssh_host = ssh_host  # Permanently set to laptop IP
+        self.user_id = "default"  # Default user ID
+        
+        # ReSpeaker controller
+        self.respeaker = ReSpeakerController()
+        
+        # Video streamer (dummy for compatibility)
+        self.video_streamer = VideoStreamer()
         
         # Create recording directory if it doesn't exist
         os.makedirs(self.recording_dir, exist_ok=True)
+        
+        # Initialize ReSpeaker
+        if RESPEAKER_AVAILABLE:
+            if self.respeaker.initialize():
+                print("ReSpeaker initialized successfully")
+                if self.ssh_host:
+                    self.respeaker.setup_ssh_streaming(self.ssh_host, ssh_port=9999)
+            else:
+                print("Failed to initialize ReSpeaker")
+        else:
+            print("ReSpeaker not available, continuing without spatial audio")
+    
+    def set_user_id(self, user_id):
+        """Set user ID for file naming"""
+        if user_id and user_id.strip():
+            # Sanitize user ID for filename usage
+            self.user_id = "".join(c for c in user_id.strip() if c.isalnum() or c in ('-', '_'))
+            return True
+        return False
     
     def start_recording(self):
         if self.is_recording:
-            return
+            return False
             
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # 使用 h264 格式避免 MP4 的问题
-        self.h264_file = os.path.join(self.recording_dir, f"video_{timestamp}.h264")
-        self.audio_file = os.path.join(self.recording_dir, f"audio_{timestamp}.wav")
-        self.final_file = os.path.join(self.recording_dir, f"recording_{timestamp}.mp4")
-        
         try:
-            # 同时启动视频和音频录制
-            # 启动视频录制
-            self.video_process = subprocess.Popen([
-                "libcamera-vid",
-                "-t", "0",  # 无限时长
-                "-o", self.h264_file,
-                "--width", "1920",
-                "--height", "1080",
-                "--framerate", "30",
-                "--codec", "h264",
-                "--bitrate", "5000000",
-                "-n"  # 不显示预览窗口
-            ])
+            print(f"Starting recording session: {timestamp}")
             
-            # 启动音频录制
-            self.audio_process = subprocess.Popen([
-                "arecord",
-                "-D", "plughw:3,0",
-                "-f", "cd",  # CD 质量 (44100 Hz, 16-bit, stereo)
-                "-t", "wav",
-                self.audio_file
-            ])
+            # Start ReSpeaker capture
+            if RESPEAKER_AVAILABLE and self.respeaker.device_index:
+                self.respeaker.start_capture(self.recording_dir, timestamp)
+            
+            # Video streaming disabled (camera removed)
+            # Note: keeping original structure but video is now disabled
             
             self.is_recording = True
             self.start_time = time.time()
-            print(f"Recording started at {timestamp}")
-            print(f"Video: {self.h264_file}")
-            print(f"Audio: {self.audio_file}")
+            
+            print(f"Recording session started:")
+            if RESPEAKER_AVAILABLE and self.respeaker.device_index:
+                print(f"  ReSpeaker raw: {self.respeaker.raw_audio_file}")
+                print(f"  DOA log: {self.respeaker.doa_log_file}")
+            if self.ssh_host:
+                print(f"  Audio streaming to: {self.ssh_host}:9999")
+                print(f"  Video: Disabled (camera removed)")
+            
+            return True
             
         except Exception as e:
             print(f"Failed to start recording: {e}")
             self.stop_recording()
+            return False
     
     def stop_recording(self):
         if not self.is_recording:
-            return
+            return False
             
         try:
-            print("Stopping recording...")
+            print("Stopping recording session...")
             
-            # 同时发送停止信号
-            stop_threads = []
+            # Stop video streaming (disabled - camera removed)
+            self.video_streamer.stop_streaming()
             
-            if self.video_process:
-                t = threading.Thread(target=self._stop_process, 
-                                   args=(self.video_process, "video"))
-                stop_threads.append(t)
-                t.start()
-                
-            if self.audio_process:
-                t = threading.Thread(target=self._stop_process, 
-                                   args=(self.audio_process, "audio"))
-                stop_threads.append(t)
-                t.start()
+            # Stop ReSpeaker capture
+            if RESPEAKER_AVAILABLE:
+                self.respeaker.stop_capture()
             
-            # 等待所有进程停止
-            for t in stop_threads:
-                t.join()
-            
-            self.video_process = None
-            self.audio_process = None
             self.is_recording = False
             
             duration = time.time() - self.start_time
-            print(f"Recording stopped. Duration: {duration:.2f} seconds")
+            print(f"Recording session stopped. Duration: {duration:.2f} seconds")
             
-            # 等待文件写入完成
-            time.sleep(1)
-            
-            # 检查文件
-            if os.path.exists(self.h264_file) and os.path.exists(self.audio_file):
-                video_size = os.path.getsize(self.h264_file) / 1024 / 1024
-                audio_size = os.path.getsize(self.audio_file) / 1024 / 1024
-                print(f"Video size: {video_size:.2f} MB")
-                print(f"Audio size: {audio_size:.2f} MB")
-                
-                # 合并文件
-                self._merge_files()
-            else:
-                print("Error: Recording files not found!")
+            return True
                 
         except Exception as e:
             print(f"Error stopping recording: {e}")
-            # 强制终止
-            if self.video_process:
-                self.video_process.kill()
-            if self.audio_process:
-                self.audio_process.kill()
+            return False
     
-    def _stop_process(self, process, name):
-        """停止单个进程"""
-        try:
-            # 先尝试 SIGINT (Ctrl+C)
-            process.send_signal(signal.SIGINT)
-            process.wait(timeout=3)
-            print(f"{name} stopped gracefully")
-        except subprocess.TimeoutExpired:
-            # 如果超时，使用 SIGTERM
-            print(f"{name} didn't stop gracefully, terminating...")
-            process.terminate()
-            process.wait(timeout=2)
-        except Exception as e:
-            print(f"Error stopping {name}: {e}")
-            process.kill()
-            process.wait()
-    
-    def _merge_files(self):
-        """合并音视频文件"""
-        print("Merging audio and video...")
+    def get_recording_status(self):
+        """Get current recording status for web interface"""
+        status = {
+            'is_recording': self.is_recording,
+            'respeaker_available': RESPEAKER_AVAILABLE,
+            'respeaker_initialized': self.respeaker.device_index is not None if RESPEAKER_AVAILABLE else False,
+            'ssh_connected': self.respeaker.ssh_connected if RESPEAKER_AVAILABLE else False,
+            'video_streaming': self.video_streamer.is_streaming,  # Always False now
+            'laptop_ip': self.ssh_host,
+            'user_id': self.user_id
+        }
         
-        try:
-            # 使用 ffmpeg 合并，跳过音频的前2.9秒
-            merge_cmd = [
-                "ffmpeg",
-                "-i", self.h264_file,  # 视频输入（从头开始）
-                "-ss", "0.8",  # 跳过音频的前2.9秒
-                "-i", self.audio_file,  # 音频输入
-                "-c:v", "copy",  # 直接复制视频流
-                "-c:a", "aac",  # 音频编码为 AAC
-                "-b:a", "192k",  # 音频比特率
-                "-shortest",  # 以最短的流为准
-                "-avoid_negative_ts", "make_zero",  # 避免时间戳问题
-                "-y",  # 覆盖输出文件
-                self.final_file
-            ]
+        if self.is_recording:
+            status['duration'] = time.time() - self.start_time
             
-            result = subprocess.run(merge_cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                print(f"Successfully created: {self.final_file}")
-                
-                # 检查输出文件
-                if os.path.exists(self.final_file):
-                    final_size = os.path.getsize(self.final_file) / 1024 / 1024
-                    print(f"Final file size: {final_size:.2f} MB")
-                    
-                    # 删除临时文件
-                    os.remove(self.h264_file)
-                    os.remove(self.audio_file)
-                    print("Temporary files removed")
-                else:
-                    print("Error: Output file not created!")
-            else:
-                print(f"FFmpeg error: {result.stderr}")
-                print("Keeping original files for debugging")
-                
-        except Exception as e:
-            print(f"Error merging files: {e}")
-            print("Original files kept for manual merging")
+            # Get current DOA if available
+            if RESPEAKER_AVAILABLE and self.respeaker.tuning:
+                status['current_doa'] = self.respeaker.get_current_doa()
+        
+        return status
+    
+    def cleanup(self):
+        """Cleanup all resources"""
+        if self.is_recording:
+            self.stop_recording()
+        
+        if RESPEAKER_AVAILABLE:
+            self.respeaker.cleanup()
 
+
+# For backward compatibility with existing Flask interface
+RecordingControl_v2 = RecordingControl_v3

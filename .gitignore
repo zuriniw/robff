@@ -2,4 +2,7 @@
 __pycache__/
 
 # Ignore recording directory
-recording/
+recordings/
+
+*.wav
+*.json

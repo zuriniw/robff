@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright Pololu Corporation.  For more information, see https://www.pololu.com/
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask import render_template
 from flask import redirect
 from subprocess import call
@@ -15,9 +15,9 @@ a_star = AStar()
 from utilities.robot_buttom import RobotButtonControl
 robot_control = RobotButtonControl(a_star)
 
-# Import recording module
-from utilities.recording import RecordingControl_v2
-recording_control = RecordingControl_v2()
+# Import enhanced recording module with ReSpeaker support
+from utilities.recording import RecordingControl_v3
+recording_control = RecordingControl_v3()  # IP permanently set to 172.20.10.4
 
 import json
 
@@ -174,15 +174,34 @@ def halt():
 def shutting_down():
     return "Shutting down in 2 seconds! You can remove power when the green LED stops flashing."
 
+# ========== ENHANCED RECORDING CONTROL WITH RESPEAKER ==========
+
 @app.route("/start_recording")
 def start_recording():
-    recording_control.start_recording()
-    return ""
+    success = recording_control.start_recording()
+    return json.dumps({"success": success})
 
 @app.route("/stop_recording")
 def stop_recording():
-    recording_control.stop_recording()
-    return ""
+    success = recording_control.stop_recording()
+    return json.dumps({"success": success})
+
+@app.route("/set_user_id", methods=['POST'])
+def set_user_id():
+    """Set user ID for file naming"""
+    data = request.get_json()
+    user_id = data.get('user_id', '')
+    
+    if recording_control.set_user_id(user_id):
+        return json.dumps({"success": True, "message": f"User ID set to {recording_control.user_id}"})
+    else:
+        return json.dumps({"success": False, "message": "Invalid user ID"})
+
+@app.route("/recording_status.json")
+def recording_status():
+    """Get detailed recording status"""
+    status = recording_control.get_recording_status()
+    return json.dumps(status)
 
 # ========== SERVO POSITION CONTROL WITH PAUSE CHECK ==========
 
@@ -261,7 +280,7 @@ def get_servo_pwm_values():
     pwm_values = a_star.servo_get_pwm_values()
     return json.dumps(pwm_values)
 
-# ========== STATUS REPORTING WITH PAUSE STATE ==========
+# ========== STATUS REPORTING WITH ENHANCED RECORDING INFO ==========
 
 @app.route("/status.json")
 def status():
@@ -272,6 +291,9 @@ def status():
     servo_status = a_star.read_servo_status()
     servo_pwm = a_star.servo_get_pwm_values()
     
+    # Get recording status
+    recording_status = recording_control.get_recording_status()
+    
     data = {
         "buttons": buttons,
         "battery_millivolts": battery_millivolts,
@@ -280,9 +302,10 @@ def status():
         "speed_level": current_speed,
         "servo_status": servo_status,
         "servo_pwm": servo_pwm,
-        "paused": paused  # Add pause state to status
+        "paused": paused,
+        "recording": recording_status,
+        "user_id": recording_control.user_id  # Add this line
     }
     return json.dumps(data)
-
 if __name__ == "__main__":
     app.run(host = "0.0.0.0")

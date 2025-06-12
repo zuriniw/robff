@@ -21,6 +21,18 @@
   <a href="/halt" onClick="return shutdown()" class="top-btn right">Shutdown</a>
 </div>
 
+<!-- User ID Controls (Right under top controls) -->
+<div class="control-section">
+  <div class="user-controls">
+    <div class="user-input-section">
+      <div class="user-input-row">
+        <input type="text" id="user-id-input" placeholder="user123" value="user123">
+        <button id="set-user-btn">Set User</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Arm Controls -->
 <div class="control-section">
   
@@ -28,11 +40,10 @@
   <div class="preset-row">
     <button id="servo-capture-btn" class="preset-btn">Capture</button>
     <button id="servo-grip-btn" class="preset-btn">Grip</button>
-    <button id="servo-hold-btn" class="preset-btn">Hold</button>  <!-- Add this line -->
+    <button id="servo-hold-btn" class="preset-btn">Hold</button>
     <button id="servo-lift-btn" class="preset-btn">Lift</button>
     <button id="servo-park-btn" class="preset-btn">Park</button>
     <button id="servo-home-btn" class="preset-btn">Home</button>
-
   </div>
   
   <!-- Manual Control Sliders -->
@@ -59,7 +70,7 @@
                max="1900" 
                value="1550" 
                oninput="updateSliderValue('lift', this.value); setServoPWM('lift', this.value)"
-               style="transform: rotate(-90deg) scaleX(-1);"><!-- 额外翻转使Up在顶部 -->
+               style="transform: rotate(-90deg) scaleX(-1);">
       </div>
     </div>
     
@@ -167,6 +178,30 @@
       </div>
     </div>
     
+  </div>
+</div>
+
+<!-- ReSpeaker Status Panel (NEW - Between movement controls and bottom info) -->
+<div class="control-section">
+  <div class="respeaker-status-panel">
+    <div class="status-grid">
+      <div class="status-item">
+        <span class="status-label">Hardware:</span>
+        <span id="respeaker-init" class="status-value">Checking...</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Streaming:</span>
+        <span id="streaming-status" class="status-value">To 172.20.10.4</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">User:</span>
+        <span id="current-user" class="status-value">default</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">DOA:</span>
+        <span id="current-doa" class="status-value">--</span>°
+      </div>
+    </div>
   </div>
 </div>
 

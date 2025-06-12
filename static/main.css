@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Mono:wght@100..900&display=swap');
 
-
 html, body {
   margin: 0;
   padding: 0;
@@ -96,6 +95,69 @@ input, button {
 }
 
 /* ============================================================================ */
+/* USER ID CONTROLS */
+/* ============================================================================ */
+
+.user-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5em 0;
+}
+
+.user-input-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-input-section label {
+  font-size: 0.9rem;
+  color: #555;
+  font-weight: 400;
+  font-family: 'Noto Sans Mono', monospace;
+}
+
+.user-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#user-id-input {
+  padding: 6px 12px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: 'Noto Sans Mono', monospace;
+  width: 120px;
+  text-align: center;
+}
+
+#user-id-input:focus {
+  outline: none;
+  border-color: #999;
+}
+
+#set-user-btn {
+  padding: 6px 16px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: 'Noto Sans Mono', monospace;
+  font-weight: 400;
+}
+
+#set-user-btn:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+/* ============================================================================ */
 /* CONTROL SECTIONS */
 /* ============================================================================ */
 
@@ -105,6 +167,74 @@ input, button {
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #fff;
+}
+
+/* ============================================================================ */
+/* RESPEAKER STATUS PANEL */
+/* ============================================================================ */
+
+.respeaker-status-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0.5em 0;
+}
+
+.status-header {
+  font-size: 0.95rem;
+  color: #333;
+  font-family: 'Noto Sans Mono', monospace;
+  font-weight: 400;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  font-family: 'Noto Sans Mono', monospace;
+}
+
+.status-label {
+  color: #666;
+  font-weight: 400;
+  min-width: 70px;
+  text-align: left;
+}
+
+.status-value {
+  color: #333;
+  font-weight: 400;
+  text-align: right;
+  min-width: 80px;
+}
+
+/* Status value colors */
+#respeaker-init.status-value {
+  color: #666;
+}
+
+#streaming-status.status-value {
+  color: #666;
+}
+
+#current-user.status-value {
+  color: #333;
+  font-weight: 500;
+}
+
+#current-doa.status-value {
+  color: #333;
+  font-weight: 500;
 }
 
 /* ============================================================================ */
@@ -348,8 +478,6 @@ input, button {
   border-bottom: 8px solid #666; /* 向上的三角形 */
 }
 
-
-
 /* ============================================================================ */
 /* GRIPPER CLAW SLIDER - FIXED ORIENTATION */
 /* ============================================================================ */
@@ -396,8 +524,6 @@ input, button {
   color: #888;
   margin-bottom: 5px;
 }
-
-
 
 /* ============================================================================ */
 /* MOVEMENT CONTROLS - REDESIGNED LAYOUT */
