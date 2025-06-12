@@ -54,7 +54,7 @@ class ReSpeakerController:
         self.stream = None
         self.device_index = None
         self.usb_device = None
-        self.tuning = None
+        self.Mic_tuning = None  # Changed variable name to match working example
         
         # Data storage
         self.raw_audio_data = []
@@ -64,6 +64,11 @@ class ReSpeakerController:
         # SSH streaming
         self.ssh_socket = None
         self.ssh_connected = False
+        
+        # DOA tracking
+        self.doa_thread = None
+        self.current_doa = None
+        self.doa_lock = threading.Lock()
         
     def initialize(self):
         """Initialize ReSpeaker hardware and audio interface"""
@@ -77,8 +82,15 @@ class ReSpeakerController:
             # Find ReSpeaker USB device for DOA - Updated to detect any USB port
             self.usb_device = usb.core.find(idVendor=0x2886, idProduct=0x0018)
             if self.usb_device:
-                self.tuning = Tuning(self.usb_device)
+                self.Mic_tuning = Tuning(self.usb_device)  # Changed to match working example
                 print(f"ReSpeaker USB device initialized for DOA on Bus {self.usb_device.bus:03d} Device {self.usb_device.address:03d}")
+                
+                # Test DOA reading immediately
+                try:
+                    test_doa = self.Mic_tuning.direction
+                    print(f"Initial DOA test reading: {test_doa}")
+                except Exception as e:
+                    print(f"Initial DOA test failed: {e}")
             else:
                 print("Warning: ReSpeaker USB device not found for DOA")
             
@@ -89,11 +101,52 @@ class ReSpeakerController:
                 return False
                 
             print(f"ReSpeaker audio device found at index: {self.device_index}")
+            
+            # Start DOA reading thread if USB device is available
+            if self.Mic_tuning:
+                self._start_doa_thread()
+            
             return True
             
         except Exception as e:
             print(f"Error initializing ReSpeaker: {e}")
             return False
+    
+    def _start_doa_thread(self):
+        """Start separate thread for DOA readings"""
+        if not self.Mic_tuning:
+            return
+            
+        self.doa_thread = threading.Thread(target=self._doa_reading_loop)
+        self.doa_thread.daemon = True
+        self.doa_thread.start()
+        print("DOA reading thread started")
+    
+    def _doa_reading_loop(self):
+        """Separate thread for reading DOA values"""
+        while self.Mic_tuning:
+            try:
+                # Read DOA value
+                doa_value = self.Mic_tuning.direction
+                
+                # Update current DOA with thread lock
+                with self.doa_lock:
+                    self.current_doa = doa_value
+                
+                # Small delay to prevent overwhelming the USB device
+                time.sleep(0.1)  # 10Hz update rate
+                
+            except Exception as e:
+                # Only print error occasionally to avoid spam
+                if hasattr(self, '_doa_error_count'):
+                    self._doa_error_count += 1
+                else:
+                    self._doa_error_count = 1
+                    
+                if self._doa_error_count % 100 == 1:
+                    print(f"DOA reading error (count: {self._doa_error_count}): {e}")
+                
+                time.sleep(0.1)
     
     def _find_respeaker_audio_device(self):
         """Find ReSpeaker audio device index - Enhanced detection"""
@@ -195,14 +248,9 @@ class ReSpeakerController:
                 # Store raw audio data
                 self.raw_audio_data.append(audio_data)
                 
-                # Get DOA every 10 frames to reduce processing load
-                doa_angle = None
-                if frame_count % 10 == 0 and self.tuning:
-                    try:
-                        doa_angle = self.tuning.direction
-                    except Exception as e:
-                        if frame_count % 100 == 0:  # Only print every 100 frames to avoid spam
-                            print(f"DOA read error: {e}")
+                # Get current DOA from separate thread
+                with self.doa_lock:
+                    doa_angle = self.current_doa
                 
                 # Store DOA data
                 doa_entry = {
@@ -246,11 +294,9 @@ class ReSpeakerController:
     
     def get_current_doa(self):
         """Get current DOA reading for status updates"""
-        if self.tuning and self.is_capturing:
-            try:
-                return self.tuning.direction
-            except:
-                return None
+        if self.Mic_tuning and self.is_capturing:
+            with self.doa_lock:
+                return self.current_doa
         return None
     
     def stop_capture(self):
@@ -300,16 +346,26 @@ class ReSpeakerController:
             return
             
         try:
+            # Count non-null DOA readings
+            non_null_count = sum(1 for entry in self.doa_data if entry['doa_angle'] is not None)
+            
             with open(self.doa_log_file, 'w') as f:
                 json.dump(self.doa_data, f, indent=2)
             
-            print(f"DOA log saved: {self.doa_log_file} ({len(self.doa_data)} entries)")
+            print(f"DOA log saved: {self.doa_log_file} ({len(self.doa_data)} entries, {non_null_count} with valid DOA)")
             
         except Exception as e:
             print(f"Error saving DOA log: {e}")
     
     def cleanup(self):
         """Cleanup resources"""
+        # Stop DOA thread
+        if self.Mic_tuning:
+            self.Mic_tuning = None
+            
+        if hasattr(self, 'doa_thread') and self.doa_thread:
+            self.doa_thread.join(timeout=2)
+            
         if self.stream:
             self.stream.close()
         if self.audio:
@@ -446,7 +502,7 @@ class RecordingControl_v3:
             status['duration'] = time.time() - self.start_time
             
             # Get current DOA if available
-            if RESPEAKER_AVAILABLE and self.respeaker.tuning:
+            if RESPEAKER_AVAILABLE and self.respeaker.Mic_tuning:
                 status['current_doa'] = self.respeaker.get_current_doa()
         
         return status
@@ -462,3 +518,5 @@ class RecordingControl_v3:
 
 # For backward compatibility with existing Flask interface
 RecordingControl_v2 = RecordingControl_v3
+
+
