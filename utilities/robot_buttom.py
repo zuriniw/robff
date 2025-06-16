@@ -9,8 +9,8 @@ class RobotButtonControl:
     SPEED_MODERATE = 0.5
     SPEED_FAST = 0.9
     
-    # 右轮速度修正因子 (降低到左轮的68%)
-    RIGHT_WHEEL_CORRECTION = 0.69
+    # 右轮速度修正因子 (目前为1，无修正）
+    RIGHT_WHEEL_CORRECTION = 1
     
     def __init__(self, a_star):
         """Initialize the robot button control module"""

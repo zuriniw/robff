@@ -10,14 +10,6 @@ block_set_motors = false
 mouse_dragging = false
 current_speed = "fast"  // Default speed level
 
-// Keyboard control state
-let keys_pressed = {
-  w: false,
-  a: false,
-  s: false,
-  d: false
-}
-
 // Recording state
 let is_recording = false
 
@@ -27,6 +19,9 @@ let is_paused = false
 // ReSpeaker/Streaming state
 let user_id = "default"
 let respeaker_status = {}
+
+// Keyboard controls instance
+let keyboardControls = null
 
 // ============================================================================
 // INITIALIZATION
@@ -249,85 +244,43 @@ function initRotationButtons() {
 }
 
 // ============================================================================
-// MOVEMENT CONTROL - KEYBOARD
+// MOVEMENT CONTROL - KEYBOARD (使用分离的模块)
 // ============================================================================
 
 function initKeyboardControls() {
-  $(document).on("keydown", function(e) {
-    // Skip keyboard controls if user is typing in an input field
-    if ($(e.target).is('input, textarea, select')) {
-      return;
-    }
-    
-    let key = e.key.toLowerCase()
-    if (key in keys_pressed && !keys_pressed[key]) {
-      keys_pressed[key] = true
-      if (!is_paused) updateMovementFromKeys()
-      e.preventDefault()
-    }
-  })
-  
-  $(document).on("keyup", function(e) {
-    // Skip keyboard controls if user is typing in an input field
-    if ($(e.target).is('input, textarea, select')) {
-      return;
-    }
-    
-    let key = e.key.toLowerCase()
-    if (key in keys_pressed && keys_pressed[key]) {
-      keys_pressed[key] = false
-      updateMovementFromKeys()
-      e.preventDefault()
-    }
-  })
-}
-
-function updateMovementFromKeys() {
-  let forward = keys_pressed.w
-  let backward = keys_pressed.s
-  let left = keys_pressed.a
-  let right = keys_pressed.d
-  
-  // Check if any movement key is pressed
-  if (!forward && !backward && !left && !right) {
-    $.ajax({url: "stop_movement"})
+  // 确保 KeyboardControls 类已加载
+  if (typeof KeyboardControls === 'undefined') {
+    console.error('KeyboardControls class not found. Make sure keyboard-controls.js is loaded.')
     return
   }
   
-  // If paused, stop movement
-  if (is_paused) {
-    $.ajax({url: "stop_movement"})
-    return
+  // 创建键盘控制实例
+  keyboardControls = new KeyboardControls()
+  
+  // 初始化键盘控制，传入所需的依赖函数
+  const success = keyboardControls.init({
+    setMotors: setMotors,
+    isSystemPaused: () => is_paused,
+    stopMovement: () => $.ajax({url: "stop_movement"}),
+    setServoPWM: setServoPWM,
+    updateSliderValue: updateSliderValue
+  })
+  
+  if (!success) {
+    console.error('Failed to initialize keyboard controls')
+    keyboardControls = null
+  } else {
+    // 设置自定义参数（可选）
+    keyboardControls.setParameters({
+      servoStep: 30,              // 每次按键的PWM步进值
+      servoUpdateInterval: 50     // 伺服更新间隔（毫秒）
+    })
+    
+    console.log('Keyboard controls initialized with servo support:')
+    console.log('  WASD: Movement control')
+    console.log('  Q/E: Lift up/down')
+    console.log('  Z/C: Gripper close/open')
   }
-  
-  // Calculate motor values like joystick but with fixed patterns
-  let left_motor = 0
-  let right_motor = 0
-  let base_strength = 200  // Match button base_speed = 200
-  
-  // Forward/backward movement
-  if (forward && !backward) {
-    left_motor += base_strength
-    right_motor += base_strength
-  } else if (backward && !forward) {
-    left_motor -= base_strength
-    right_motor -= base_strength
-  }
-  
-  // Left/right rotation (can combine with forward/backward)
-  if (left && !right) {
-    left_motor -= base_strength * 0.6
-    right_motor += base_strength * 0.6
-  } else if (right && !left) {
-    left_motor += base_strength * 0.6
-    right_motor -= base_strength * 0.6
-  }
-  
-  // Limit motor values
-  left_motor = Math.max(-200, Math.min(200, left_motor))
-  right_motor = Math.max(-200, Math.min(200, right_motor))
-  
-  setMotors(Math.round(left_motor), Math.round(right_motor))
 }
 
 // ============================================================================
@@ -436,10 +389,6 @@ function setMotorsDone() {
 // ============================================================================
 
 function initServoButtons() {
-  $("#servo-home-btn").on("click", function(e) {
-    e.preventDefault()
-    if (!is_paused) servoHome()
-  })
 
   $("#servo-hold-btn").on("click", function(e) {
     e.preventDefault()
@@ -461,10 +410,6 @@ function initServoButtons() {
     if (!is_paused) servoLift()
   })
   
-  $("#servo-park-btn").on("click", function(e) {
-    e.preventDefault()
-    if (!is_paused) servoPark()
-  })
 }
 
 function servoHome() {
