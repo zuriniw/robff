@@ -171,29 +171,29 @@ class AStar:
     
     # Update provided PWM values with range checking
     if lift_pwm is not None:
-      if 1000 <= lift_pwm <= 1900:
+      if 1000 <= lift_pwm <= 1536:
         self.write_pack(45, 'H', lift_pwm)
       else:
-        print(f"Warning: lift_pwm {lift_pwm} out of range (1000-1900)")
+        print(f"Warning: lift_pwm {lift_pwm} out of range (1000-1506)")
     
     if tilt_pwm is not None:
-      if 1210 <= tilt_pwm <= 1890:
+      if 1515 <= tilt_pwm <= 1900:
         self.write_pack(47, 'H', tilt_pwm)
       else:
-        print(f"Warning: tilt_pwm {tilt_pwm} out of range (1210-1890)")
+        print(f"Warning: tilt_pwm {tilt_pwm} out of range (1515-1890)")
     
     if gripper_pwm is not None:
-      if 500 <= gripper_pwm <= 2330:
+      if 500 <= gripper_pwm <= 2400:
         self.write_pack(49, 'H', gripper_pwm)
       else:
         print(f"Warning: gripper_pwm {gripper_pwm} out of range (500-2330)")
 
   def servo_set_lift_pwm(self, pwm_value):
-    """Set lift servo PWM value (1000-1900μs)"""
+    """Set lift servo PWM value (1000-1506)"""
     self.servo_set_pwm(lift_pwm=pwm_value)
 
   def servo_set_tilt_pwm(self, pwm_value):
-    """Set tilt servo PWM value (1210-1890μs)"""
+    """Set tilt servo PWM value (1515-1890μs)"""
     self.servo_set_pwm(tilt_pwm=pwm_value)
 
   def servo_set_gripper_pwm(self, pwm_value):
@@ -228,7 +228,7 @@ class AStar:
         'gripper': gripper_pwm
       }
     except:
-      return {'lift': 1550, 'tilt': 1500, 'gripper': 500}
+      return {'lift': 1446, 'tilt': 1791, 'gripper': 500}
 
   def servo_is_enabled(self):
     """Check if servos are currently enabled"""

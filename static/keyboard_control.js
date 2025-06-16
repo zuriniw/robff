@@ -29,14 +29,14 @@ class KeyboardControls {
     this.rotation_factor = 0.6  // Factor for rotation strength relative to forward/backward
     
     // Servo control parameters
-    this.servo_step = 20  // PWM step size for servo adjustments
+    this.servo_step = 180  // PWM step size for servo adjustments
     this.servo_update_interval = 100  // Milliseconds between servo updates
     this.last_servo_update = 0
     this.servo_timer = null  // Timer for continuous servo updates
     
-    // PWM ranges for each servo (from your C++ code)
+    // PWM ranges for each servo
     this.pwm_ranges = {
-      lift: { min: 1000, max: 1630, mid: 1350 },
+      lift: { min: 1000, max: 1506, mid: 1350 },
       tilt: { min: 1515, max: 1900, mid: 1700 },
       gripper: { min: 500, max: 2400, mid: 1440 }
     }

@@ -15,8 +15,8 @@ A Flask-based web interface for controlling a Romi robot with integrated servo a
 
 ### Robotic Arm
 - 3-servo system with PWM control:
-  - Lift servo (1000-1900μs)
-  - Tilt servo (1210-1890μs)
+  - Lift servo (1000-1506)
+  - Tilt servo (1515-1890μs)
   - Gripper servo (500-2330μs)
 - Visual slider controls with live feedback
 - Preset positions:
