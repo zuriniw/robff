@@ -71,42 +71,15 @@ int currentLiftPulse = LIFT_MID;      // 1550 - initial position
 int currentTiltPulse = TILT_MID;      // 1500 - initial position  
 int currentGripperPulse = GRIPPER_MIN; // 500 - initial position
 
-// ============================================================================
-// ANTI-JITTER WITH STATIC DETECTION
-// ============================================================================
-
-// Anti-jitter parameters
-const int PWM_DEADZONE = 10;        // Increased deadzone for better stability
-const int PWM_FILTER_ALPHA = 3;    // Low-pass filter strength
-const unsigned long SERVO_UPDATE_MIN_INTERVAL = 20; // Minimum ms between servo updates
-const int STATIC_THRESHOLD = 3;     // Consider static when filtered value is within this range of target
-const unsigned long STATIC_TIMEOUT = 300; // Time (ms) before considering servo static
-
-// Filtered PWM values for smooth transitions
-int filteredLiftPulse = LIFT_MID;
-int filteredTiltPulse = TILT_MID;
-int filteredGripperPulse = GRIPPER_MIN;
-
-// Target PWM values
+// Target PWM values for smooth movement
 int targetLiftPulse = LIFT_MID;
 int targetTiltPulse = TILT_MID;
 int targetGripperPulse = GRIPPER_MIN;
 
-// Last actual PWM values sent to servos
-int lastLiftPulse = LIFT_MID;
-int lastTiltPulse = TILT_MID;
-int lastGripperPulse = GRIPPER_MIN;
-
-// Static detection
-unsigned long lastLiftChange = 0;
-unsigned long lastTiltChange = 0;
-unsigned long lastGripperChange = 0;
-bool liftIsStatic = false;
-bool tiltIsStatic = false;
-bool gripperIsStatic = false;
-
-// Timing for servo updates
-unsigned long lastServoCommandTime = 0;
+// Servo movement speeds
+const int LIFT_SPEED = 10;      // Slower for lift
+const int TILT_SPEED = 10;      // Medium speed for tilt
+const int GRIPPER_SPEED = 40;   // Faster for gripper due to larger range
 
 // ============================================================================
 // SETUP - INITIALIZATION
@@ -167,20 +140,16 @@ void loop()
 void debugPrint() {
   static unsigned long lastPrint = 0;
   if (millis() - lastPrint > 1000) { // Every 1 second
-    Serial.print("Servo Static: L=");
-    Serial.print(liftIsStatic ? "Y" : "N");
-    Serial.print(" T=");
-    Serial.print(tiltIsStatic ? "Y" : "N");
-    Serial.print(" G=");
-    Serial.print(gripperIsStatic ? "Y" : "N");
-    Serial.print(" | Target: L=");
-    Serial.print(targetLiftPulse);
-    Serial.print(" T=");
-    Serial.print(targetTiltPulse);
-    Serial.print(" | Filtered: L=");
-    Serial.print(filteredLiftPulse);
-    Serial.print(" T=");
-    Serial.println(filteredTiltPulse);
+    Serial.print("Motors: L=");
+    Serial.print(slave.buffer.leftMotor);
+    Serial.print(" R=");
+    Serial.print(slave.buffer.rightMotor);
+    Serial.print(" | Servo: en=");
+    Serial.print(slave.buffer.servoEnable);
+    Serial.print(" pos=");
+    Serial.print(slave.buffer.servoPosition);
+    Serial.print(" att=");
+    Serial.println(servosAttached);
     lastPrint = millis();
   }
 }
@@ -241,49 +210,69 @@ void handleBuzzer() {
 }
 
 // ============================================================================
-// MAIN SERVO HANDLER - ENHANCED WITH STATIC OPTIMIZATION
+// SERVO CONTROL - MAIN HANDLER
 // ============================================================================
 
 void handleServoControl() {
-  // Skip most processing if all servos are static
-  if (servosAttached && liftIsStatic && tiltIsStatic && gripperIsStatic) {
-    // Only check for enable/disable or position changes
-    handleServoEnable();
-    
-    // Check if new commands arrived
-    static uint16_t lastCheckedLiftPWM = 0, lastCheckedTiltPWM = 0, lastCheckedGripperPWM = 0;
-    static uint8_t lastCheckedPosition = NONE;
-    
-    if (slave.buffer.liftPWM != lastCheckedLiftPWM || 
-        slave.buffer.tiltPWM != lastCheckedTiltPWM ||
-        slave.buffer.gripperPWM != lastCheckedGripperPWM ||
-        slave.buffer.servoPosition != lastCheckedPosition) {
-      // New command detected, process normally
-      lastCheckedLiftPWM = slave.buffer.liftPWM;
-      lastCheckedTiltPWM = slave.buffer.tiltPWM;
-      lastCheckedGripperPWM = slave.buffer.gripperPWM;
-      lastCheckedPosition = slave.buffer.servoPosition;
-    } else {
-      // No changes, skip processing
-      return;
-    }
+  if (millis() - lastServoUpdate < 20) {
+    return;
   }
-  
+  lastServoUpdate = millis();
+
   // Handle servo enable/disable
   handleServoEnable();
   
   if (!servosAttached) return;
 
-  // Handle PWM control with priority over preset positions
+  // Always perform smooth movement
+  smoothServoMovement();
+
+  // Handle PWM control - this updates target values
   if (handlePWMControl()) {
     return; // PWM control active, skip preset positions
   }
 
   // Handle preset position control
   handlePresetPositions();
-  
-  // Always update filtered positions (for smooth transitions)
-  updateFilteredServoPositions();
+}
+
+// ============================================================================
+// SERVO CONTROL - SMOOTH MOVEMENT
+// ============================================================================
+
+void smoothServoMovement() {
+  // Lift servo smooth movement
+  if (currentLiftPulse != targetLiftPulse) {
+    int diff = targetLiftPulse - currentLiftPulse;
+    if (abs(diff) <= LIFT_SPEED) {
+      currentLiftPulse = targetLiftPulse;
+    } else {
+      currentLiftPulse += (diff > 0) ? LIFT_SPEED : -LIFT_SPEED;
+    }
+    liftServo.writeMicroseconds(currentLiftPulse);
+  }
+
+  // Tilt servo smooth movement
+  if (currentTiltPulse != targetTiltPulse) {
+    int diff = targetTiltPulse - currentTiltPulse;
+    if (abs(diff) <= TILT_SPEED) {
+      currentTiltPulse = targetTiltPulse;
+    } else {
+      currentTiltPulse += (diff > 0) ? TILT_SPEED : -TILT_SPEED;
+    }
+    tiltServo.writeMicroseconds(currentTiltPulse);
+  }
+
+  // Gripper servo smooth movement
+  if (currentGripperPulse != targetGripperPulse) {
+    int diff = targetGripperPulse - currentGripperPulse;
+    if (abs(diff) <= GRIPPER_SPEED) {
+      currentGripperPulse = targetGripperPulse;
+    } else {
+      currentGripperPulse += (diff > 0) ? GRIPPER_SPEED : -GRIPPER_SPEED;
+    }
+    gripperServo.writeMicroseconds(currentGripperPulse);
+  }
 }
 
 // ============================================================================
@@ -296,6 +285,17 @@ void handleServoEnable() {
     liftServo.attach(21);
     tiltServo.attach(22);
     gripperServo.attach(11);
+    
+    // Initialize servos to current positions
+    liftServo.writeMicroseconds(currentLiftPulse);
+    tiltServo.writeMicroseconds(currentTiltPulse);
+    gripperServo.writeMicroseconds(currentGripperPulse);
+    
+    // Set targets to match current positions
+    targetLiftPulse = currentLiftPulse;
+    targetTiltPulse = currentTiltPulse;
+    targetGripperPulse = currentGripperPulse;
+    
     servosAttached = true;
     buzzer.play("!c32");
     Serial.println("Servos enabled");
@@ -313,148 +313,49 @@ void handleServoEnable() {
 }
 
 // ============================================================================
-// SERVO CONTROL - PWM CONTROL WITH STATIC DETECTION
+// SERVO CONTROL - PWM CONTROL
 // ============================================================================
 
 bool handlePWMControl() {
   static uint16_t lastLiftPWM = 0, lastTiltPWM = 0, lastGripperPWM = 0;
   bool pwmChanged = false;
-  unsigned long currentTime = millis();
   
-  // Check if PWM values have changed significantly
-  if (abs(slave.buffer.liftPWM - lastLiftPWM) > PWM_DEADZONE && 
+  // Check if PWM values have changed and apply them
+  if (slave.buffer.liftPWM != lastLiftPWM && 
       slave.buffer.liftPWM >= LIFT_MIN && 
       slave.buffer.liftPWM <= LIFT_MAX) {
     targetLiftPulse = slave.buffer.liftPWM;
     lastLiftPWM = slave.buffer.liftPWM;
-    lastLiftChange = currentTime;
-    liftIsStatic = false;
     pwmChanged = true;
+    Serial.print("Lift PWM: "); Serial.println(slave.buffer.liftPWM);
   }
   
-  if (abs(slave.buffer.tiltPWM - lastTiltPWM) > PWM_DEADZONE && 
+  if (slave.buffer.tiltPWM != lastTiltPWM && 
       slave.buffer.tiltPWM >= TILT_MIN && 
       slave.buffer.tiltPWM <= TILT_MAX) {
     targetTiltPulse = slave.buffer.tiltPWM;
     lastTiltPWM = slave.buffer.tiltPWM;
-    lastTiltChange = currentTime;
-    tiltIsStatic = false;
     pwmChanged = true;
+    Serial.print("Tilt PWM: "); Serial.println(slave.buffer.tiltPWM);
   }
   
-  if (abs(slave.buffer.gripperPWM - lastGripperPWM) > PWM_DEADZONE && 
+  if (slave.buffer.gripperPWM != lastGripperPWM && 
       slave.buffer.gripperPWM >= GRIPPER_MIN && 
       slave.buffer.gripperPWM <= GRIPPER_MAX) {
     targetGripperPulse = slave.buffer.gripperPWM;
     lastGripperPWM = slave.buffer.gripperPWM;
-    lastGripperChange = currentTime;
-    gripperIsStatic = false;
     pwmChanged = true;
+    Serial.print("Gripper PWM: "); Serial.println(slave.buffer.gripperPWM);
   }
   
   // If PWM changed, clear preset position state
   if (pwmChanged) {
     currentPosition = NONE;
-    slave.buffer.servoPosition = NONE;
-    return true;
+    slave.buffer.servoPosition = NONE; // Clear position buffer
+    return true; // PWM control is active
   }
   
-  return false;
-}
-
-// ============================================================================
-// SERVO FILTERING WITH STATIC DETECTION
-// ============================================================================
-
-void updateFilteredServoPositions() {
-  // Don't update too frequently
-  if (millis() - lastServoCommandTime < SERVO_UPDATE_MIN_INTERVAL) {
-    return;
-  }
-  
-  unsigned long currentTime = millis();
-  bool needsUpdate = false;
-  
-  // LIFT SERVO
-  if (!liftIsStatic) {
-    // Apply exponential moving average filter
-    int newFiltered = ((PWM_FILTER_ALPHA - 1) * filteredLiftPulse + targetLiftPulse) / PWM_FILTER_ALPHA;
-    
-    // Check if we're close to target
-    if (abs(newFiltered - targetLiftPulse) <= STATIC_THRESHOLD) {
-      // Close to target, check timeout
-      if (currentTime - lastLiftChange > STATIC_TIMEOUT) {
-        // Lock to target value
-        filteredLiftPulse = targetLiftPulse;
-        liftIsStatic = true;
-        Serial.println("Lift servo locked to static position");
-      } else {
-        filteredLiftPulse = newFiltered;
-      }
-    } else {
-      filteredLiftPulse = newFiltered;
-      lastLiftChange = currentTime; // Reset timeout if still moving
-    }
-    
-    // Only update servo if filtered value has changed significantly
-    if (abs(filteredLiftPulse - lastLiftPulse) > PWM_DEADZONE) {
-      liftServo.writeMicroseconds(filteredLiftPulse);
-      lastLiftPulse = filteredLiftPulse;
-      needsUpdate = true;
-    }
-  }
-  
-  // TILT SERVO
-  if (!tiltIsStatic) {
-    int newFiltered = ((PWM_FILTER_ALPHA - 1) * filteredTiltPulse + targetTiltPulse) / PWM_FILTER_ALPHA;
-    
-    if (abs(newFiltered - targetTiltPulse) <= STATIC_THRESHOLD) {
-      if (currentTime - lastTiltChange > STATIC_TIMEOUT) {
-        filteredTiltPulse = targetTiltPulse;
-        tiltIsStatic = true;
-        Serial.println("Tilt servo locked to static position");
-      } else {
-        filteredTiltPulse = newFiltered;
-      }
-    } else {
-      filteredTiltPulse = newFiltered;
-      lastTiltChange = currentTime;
-    }
-    
-    if (abs(filteredTiltPulse - lastTiltPulse) > PWM_DEADZONE) {
-      tiltServo.writeMicroseconds(filteredTiltPulse);
-      lastTiltPulse = filteredTiltPulse;
-      needsUpdate = true;
-    }
-  }
-  
-  // GRIPPER SERVO
-  if (!gripperIsStatic) {
-    int newFiltered = ((PWM_FILTER_ALPHA - 1) * filteredGripperPulse + targetGripperPulse) / PWM_FILTER_ALPHA;
-    
-    if (abs(newFiltered - targetGripperPulse) <= STATIC_THRESHOLD) {
-      if (currentTime - lastGripperChange > STATIC_TIMEOUT) {
-        filteredGripperPulse = targetGripperPulse;
-        gripperIsStatic = true;
-        Serial.println("Gripper servo locked to static position");
-      } else {
-        filteredGripperPulse = newFiltered;
-      }
-    } else {
-      filteredGripperPulse = newFiltered;
-      lastGripperChange = currentTime;
-    }
-    
-    if (abs(filteredGripperPulse - lastGripperPulse) > PWM_DEADZONE) {
-      gripperServo.writeMicroseconds(filteredGripperPulse);
-      lastGripperPulse = filteredGripperPulse;
-      needsUpdate = true;
-    }
-  }
-  
-  if (needsUpdate) {
-    lastServoCommandTime = millis();
-  }
+  return false; // No PWM changes
 }
 
 // ============================================================================
@@ -473,56 +374,42 @@ void handlePresetPositions() {
   }
 }
 
-// ============================================================================
-// SERVO CONTROL - PRESET POSITIONS (ENHANCED)
-// ============================================================================
-
 void moveToPosition(uint8_t position) {
   if (!servosAttached) return;
   
-  unsigned long currentTime = millis();
-  
   switch(position) {
     case HOME:
-      targetLiftPulse = 1446;
-      targetTiltPulse = 1791;
+      targetLiftPulse = 1446;      // 1550
+      targetTiltPulse = 1791;      // 1500
+      // buzzer.play("!c64");
       break;
       
     case HOLD:
-      targetLiftPulse = 1487;
-      targetTiltPulse = 1789;
+      targetLiftPulse = 1487;      // 1550  hold the object (can run in this arm state)
+      targetTiltPulse = 1789;      // 1500
+      // buzzer.play("!d64");
       break;
       
     case LIFT:
-      targetLiftPulse = LIFT_MIN;
-      targetTiltPulse = TILT_MAX;
+      targetLiftPulse = LIFT_MIN;      // 1000
+      targetTiltPulse = TILT_MAX;      // 1890
+      // buzzer.play("!e64");
       break;
       
     case GRIP:
-      targetLiftPulse = 1536;
-      targetTiltPulse = 1710;
-      targetGripperPulse = GRIPPER_MIN;
+      targetLiftPulse = 1536;      
+      targetTiltPulse = 1710;      // for capture the badminton
+      targetGripperPulse = GRIPPER_MIN; // 500
+      // buzzer.play("!f64");
       break;
       
     case CAPTURE:
-      targetLiftPulse = 1506;
-      targetTiltPulse = TILT_MIN;
-      targetGripperPulse = GRIPPER_MIN;
+      targetLiftPulse = 1506;      // 
+      targetTiltPulse = TILT_MIN;      // for capture/drag desktop stuff
+      targetGripperPulse = GRIPPER_MIN; // 500
+      // buzzer.play("!g64");
       break;
   }
-  
-  // Reset static flags and update change times
-  liftIsStatic = false;
-  tiltIsStatic = false;
-  gripperIsStatic = false;
-  lastLiftChange = currentTime;
-  lastTiltChange = currentTime;
-  lastGripperChange = currentTime;
-  
-  // Initialize filtered values to current positions for smooth transition
-  filteredLiftPulse = lastLiftPulse;
-  filteredTiltPulse = lastTiltPulse;
-  filteredGripperPulse = lastGripperPulse;
 }
 
 void applyServoPositions() {
@@ -532,7 +419,7 @@ void applyServoPositions() {
 }
 
 void syncPWMToBuffer() {
-  slave.buffer.liftPWM = currentLiftPulse;
-  slave.buffer.tiltPWM = currentTiltPulse;
-  slave.buffer.gripperPWM = currentGripperPulse;
+  slave.buffer.liftPWM = targetLiftPulse;
+  slave.buffer.tiltPWM = targetTiltPulse;
+  slave.buffer.gripperPWM = targetGripperPulse;
 }

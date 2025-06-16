@@ -24,26 +24,6 @@ let respeaker_status = {}
 let keyboardControls = null
 
 // ============================================================================
-// SERVO CONTROL DEBOUNCING VARIABLES
-// ============================================================================
-
-// Debouncing variables
-let servoDebounceTimers = {
-  lift: null,
-  tilt: null,
-  gripper: null
-};
-
-let lastSentPWMValues = {
-  lift: 0,
-  tilt: 0,
-  gripper: 0
-};
-
-const SERVO_DEBOUNCE_DELAY = 50; // ms delay before sending servo command
-const SERVO_DEADZONE = 10; // Ignore changes smaller than this
-
-// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -63,7 +43,6 @@ function init() {
   initKeyboardControls()
   initRecordingButton()
   initServoButtons()
-  initServoSliders() // NEW: Initialize servo sliders with better event handling
   initPauseButton()
   initReSpeakerControls()
   
@@ -71,9 +50,6 @@ function init() {
   updateSliderValue('lift', document.getElementById('liftSlider').value);
   updateSliderValue('tilt', document.getElementById('tiltSlider').value);
   updateSliderValue('gripper', document.getElementById('gripperSlider').value);
-  
-  // Enhance keyboard controls after initialization
-  setTimeout(enhanceKeyboardControls, 100);
 }
 
 // ============================================================================
@@ -308,35 +284,6 @@ function initKeyboardControls() {
 }
 
 // ============================================================================
-// ENHANCED KEYBOARD CONTROL WITH RATE LIMITING
-// ============================================================================
-
-function enhanceKeyboardControls() {
-  if (keyboardControls && keyboardControls.updateServoFromKeys) {
-    const originalUpdate = keyboardControls.updateServoFromKeys.bind(keyboardControls);
-    
-    let lastKeyboardServoUpdate = 0;
-    const KEYBOARD_SERVO_MIN_INTERVAL = 100; // ms between keyboard servo updates
-    
-    keyboardControls.updateServoFromKeys = function() {
-      const now = Date.now();
-      if (now - lastKeyboardServoUpdate < KEYBOARD_SERVO_MIN_INTERVAL) {
-        return; // Skip this update
-      }
-      
-      lastKeyboardServoUpdate = now;
-      originalUpdate();
-    };
-    
-    // Also reduce the servo step size for smoother control
-    keyboardControls.setParameters({
-      servoStep: 15,              // Reduced from 30
-      servoUpdateInterval: 100    // Increased from 50
-    });
-  }
-}
-
-// ============================================================================
 // MOVEMENT CONTROL - JOYSTICK
 // ============================================================================
 
@@ -508,18 +455,18 @@ function servoPark() {
 }
 
 // ============================================================================
-// SERVO CONTROL - MANUAL PWM SLIDERS WITH DEBOUNCING
+// SERVO CONTROL - MANUAL PWM SLIDERS (FIXED FUNCTIONS)
 // ============================================================================
 
 function updateSliderValue(servo, value) {
-    // Immediately update display value
+    // 立即更新显示值
     const valueElement = document.getElementById(servo + 'Value');
     
     if (valueElement) {
         valueElement.textContent = value;
     }
     
-    // Update visual effects immediately for responsive UI
+    // 更新象形控制的视觉效果
     switch(servo) {
         case 'lift':
             // Lift slider 是垂直的，但由于旋转，需要反转逻辑
@@ -536,50 +483,13 @@ function updateSliderValue(servo, value) {
             updateGripperClaws(value);
             break;
     }
-    
-    // Debounce the actual servo command
-    debouncedSetServoPWM(servo, value);
-}
-
-function debouncedSetServoPWM(servo, value) {
-    // If paused, don't send servo commands
-    if (is_paused) return;
-    
-    // Convert to integer
-    value = parseInt(value);
-    
-    // Check if change is significant enough
-    if (Math.abs(value - lastSentPWMValues[servo]) < SERVO_DEADZONE) {
-        return; // Ignore small changes
-    }
-    
-    // Clear existing timer for this servo
-    if (servoDebounceTimers[servo]) {
-        clearTimeout(servoDebounceTimers[servo]);
-    }
-    
-    // Set new timer
-    servoDebounceTimers[servo] = setTimeout(() => {
-        // Double-check the value hasn't changed
-        const currentSliderValue = parseInt(document.getElementById(servo + 'Slider').value);
-        
-        // Only send if value is still the same and significantly different from last sent
-        if (currentSliderValue === value && 
-            Math.abs(value - lastSentPWMValues[servo]) >= SERVO_DEADZONE) {
-            
-            lastSentPWMValues[servo] = value;
-            setServoPWM(servo, value);
-        }
-        
-        servoDebounceTimers[servo] = null;
-    }, SERVO_DEBOUNCE_DELAY);
 }
 
 function updateTiltIndicator(value) {
     const indicator = document.getElementById('tiltIndicator');
     if (indicator) {
-        // FIXED: 1890(up)对应0度(12点钟)，1515(forward)对应90度(3点钟)
-        const percentage = (value - 1890) / (1515 - 1890);
+        // FIXED: 1890(up)对应0度(12点钟)，1210(forward)对应90度(3点钟)
+        const percentage = (value - 1890) / (1210 - 1890);
         const angle = 90 * percentage; // 0度(up)到90度(forward)
         indicator.style.transform = `translateX(-50%) rotate(${angle}deg)`;
     }
@@ -603,7 +513,6 @@ function updateGripperClaws(value) {
     }
 }
 
-// Keep original setServoPWM for direct calls (preset positions, etc.)
 function setServoPWM(servo, value) {
   // If paused, don't send servo commands
   if (is_paused) return
@@ -611,9 +520,6 @@ function setServoPWM(servo, value) {
   fetch(`/servo/pwm/${servo}/${value}`)
     .then(() => {
       // Network request completed
-    })
-    .catch(err => {
-      console.error('Error setting servo PWM:', err);
     });
 }
 
@@ -630,31 +536,6 @@ function updateSlidersFromPreset() {
       updateSliderValue('lift', data.lift);
       updateSliderValue('tilt', data.tilt);
       updateSliderValue('gripper', data.gripper);
-    });
-}
-
-// ============================================================================
-// SLIDER INPUT OPTIMIZATION
-// ============================================================================
-
-function initServoSliders() {
-    ['lift', 'tilt', 'gripper'].forEach(servo => {
-        const slider = document.getElementById(servo + 'Slider');
-        if (slider) {
-            // Use 'input' event for real-time updates
-            slider.addEventListener('input', function(e) {
-                updateSliderValue(servo, e.target.value);
-            });
-            
-            // Prevent default touch behaviors that might cause jitter
-            slider.addEventListener('touchstart', function(e) {
-                e.stopPropagation();
-            });
-            
-            slider.addEventListener('touchmove', function(e) {
-                e.stopPropagation();
-            });
-        }
     });
 }
 
