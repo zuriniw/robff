@@ -12,7 +12,7 @@ from a_star import AStar
 a_star = AStar()
 
 # Import the robot button control module
-from utilities.robot_buttom import RobotButtonControl
+from utilities.robot_button import RobotButtonControl
 robot_control = RobotButtonControl(a_star)
 
 # Import enhanced recording module with ReSpeaker support
@@ -27,6 +27,46 @@ led2_state = False
 current_speed = "fast"  # Default speed level
 paused = False  # Global pause state
 
+##########################
+import cv2
+import time
+from flask import Response
+
+def generate_video():
+    cap = cv2.VideoCapture('/dev/front_cam')
+    # cap = cv2.VideoCapture('/dev/rear_cam')
+
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 15)
+    
+    if not cap.isOpened():
+        print("Error: Unable to open /dev/front_cam")
+        return
+    
+    while True:
+        for _ in range(2):  # 丢掉缓存帧
+            cap.read()
+
+        success, frame = cap.read()
+        if not success:
+            print("Warning: Failed to read frame, retrying...")
+            time.sleep(0.1)
+            continue
+
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame_bytes = buffer.tobytes()
+        
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+@app.route('/video_feed')
+def video_feed():
+    """MJPEG HTTP stream from /dev/video1"""
+    return Response(generate_video(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+###############################
 @app.route("/")
 def hello():
     return render_template("index.html")

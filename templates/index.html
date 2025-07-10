@@ -6,6 +6,7 @@
 <link rel="stylesheet" media="all" href="static/main.css">
 <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
 <script src="static/keyboard_control.js"></script>
+<script src="static/gamepad_control.js"></script>
 <script src="static/script.js?8"></script>
 
 
@@ -66,7 +67,7 @@
         <input type="range" 
                id="liftSlider" 
                class="vertical-slider"
-               min="1000" 
+               min="960" 
                max="1506" 
                value="1300" 
                oninput="updateSliderValue('lift', this.value); setServoPWM('lift', this.value)"
@@ -198,12 +199,24 @@
         <span id="current-user" class="status-value">default</span>
       </div>
       <div class="status-item">
+        <span class="status-label">Gamepad:</span>
+        <span id="gamepad-status" class="status-value">Not Connected</span>
+      </div>
+      <div class="status-item">
         <span class="status-label">DOA:</span>
         <span id="current-doa" class="status-value">--</span>°
       </div>
     </div>
   </div>
 </div>
+
+<!-- <div>
+  <img id="videoStream" src="http://172.20.10.10:8888" style="max-width: 100%; height: auto;">
+</div> -->
+
+<img src="http://172.20.10.10:8888/?action=stream" style="max-width: 100%; height: auto;">
+
+
 
 <!-- Bottom Controls: LEDs & Play + Readings -->
 <div class="bottom-controls">

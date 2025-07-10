@@ -13,12 +13,12 @@
 // ============================================================================
 
 // Servo objects with tested parameters
-Servo liftServo;    // Pin 21, max-1900-down, min-1000-up, mid-1550-mid
+Servo liftServo;    // Pin 21, max-1900-down, min-960-up, mid-1550-mid
 Servo tiltServo;    // Pin 22, max-1890-up, min-1210-down, mid-1500-flat
 Servo gripperServo; // Pin 11, max-2330-close, min-500-open, mid-1440-semiopen
 
 // Servo limits (from testing)
-const int LIFT_MIN = 1000, LIFT_MAX = 1630, LIFT_MID = 1550;
+const int LIFT_MIN = 960, LIFT_MAX = 1630, LIFT_MID = 1550;
 const int TILT_MIN = 1515, TILT_MAX = 1900, TILT_MID = 1700;
 const int GRIPPER_MIN = 500, GRIPPER_MAX = 2400, GRIPPER_MID = 1440;
 
@@ -391,7 +391,7 @@ void moveToPosition(uint8_t position) {
       break;
       
     case LIFT:
-      targetLiftPulse = LIFT_MIN;      // 1000
+      targetLiftPulse = LIFT_MIN;      //  960
       targetTiltPulse = TILT_MAX;      // 1890
       // buzzer.play("!e64");
       break;

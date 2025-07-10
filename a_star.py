@@ -171,10 +171,10 @@ class AStar:
     
     # Update provided PWM values with range checking
     if lift_pwm is not None:
-      if 1000 <= lift_pwm <= 1900:
+      if 960 <= lift_pwm <= 1900:
         self.write_pack(45, 'H', lift_pwm)
       else:
-        print(f"Warning: lift_pwm {lift_pwm} out of range (1000-1900)")
+        print(f"Warning: lift_pwm {lift_pwm} out of range (960-1900)")
     
     if tilt_pwm is not None:
       if 1210 <= tilt_pwm <= 1890:
@@ -189,7 +189,7 @@ class AStar:
         print(f"Warning: gripper_pwm {gripper_pwm} out of range (500-2330)")
 
   def servo_set_lift_pwm(self, pwm_value):
-    """Set lift servo PWM value (1000-1900μs)"""
+    """Set lift servo PWM value (960-1900μs)"""
     self.servo_set_pwm(lift_pwm=pwm_value)
 
   def servo_set_tilt_pwm(self, pwm_value):

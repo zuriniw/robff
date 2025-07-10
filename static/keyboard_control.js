@@ -1,32 +1,45 @@
 // Copyright Pololu Corporation.  For more information, see https://www.pololu.com/
 // ============================================================================
-// KEYBOARD MOVEMENT CONTROLS
+// KEYBOARD MOVEMENT CONTROLS - COMPLETE VERSION WITH SPEED SWITCHING
 // ============================================================================
 
 /**
  * Keyboard movement control module for robot car
  * Handles WASD key bindings for forward/backward/left/right movement
+ * Speed switching with [/] keys
+ * Updated with servo control mappings and presets
  */
 
 class KeyboardControls {
   constructor() {
-    // Keyboard control state
+    // Remove gripper keys from key state tracking since they're immediate actions
     this.keys_pressed = {
       w: false,
       a: false,
       s: false,
       d: false,
-      q: false,  // lift up
-      e: false,  // lift down
-      r: false,  // tilt up
-      t: false,  // tilt down
-      z: false,  // gripper close
-      c: false   // gripper open
+      i: false,           // lift up
+      k: false,           // lift down
+      ArrowUp: false,     // tilt up
+      ArrowDown: false,   // tilt down
+      '1': false,         // preset 1
+      '2': false,         // preset 2
+      '3': false,         // preset 3
+      '4': false,         // preset 4
+      '5': false,         // preset 5
+      '6': false,         // preset 6
+      '9': false,          // gripper open only
+      '0': false           // gripper close only
+      // Note: '[', ']', '-' and '=' keys are immediate actions
     }
     
     // Movement parameters
-    this.base_strength = 200  // Base motor strength for keyboard controls
+    this.base_strength = 300  // Base motor strength for keyboard controls
     this.rotation_factor = 0.6  // Factor for rotation strength relative to forward/backward
+    
+    // Speed switching - matches robot_button.py speed levels
+    this.speed_levels = ["slow", "moderate", "fast"]
+    this.current_speed_index = 2  // Start with "fast" (index 2)
     
     // Servo control parameters
     this.servo_step = 20  // PWM step size for servo adjustments
@@ -36,9 +49,43 @@ class KeyboardControls {
     
     // PWM ranges for each servo (from your C++ code)
     this.pwm_ranges = {
-      lift: { min: 1000, max: 1630, mid: 1350 },
-      tilt: { min: 1515, max: 1900, mid: 1700 },
-      gripper: { min: 500, max: 2400, mid: 1440 }
+      lift: { min: 960, max: 1630, mid: 1350 },
+      tilt: { min: 1400, max: 1900, mid: 1700 },
+      gripper: { min: 500, max: 2330, mid: 1440 }
+    }
+    
+    // Preset actions configuration - includes all servo positions and sequences
+    this.presets = {
+      '1': { name: 'Ready To Push Box', type: 'simple', lift: 960, tilt: 1890, gripper: 500 },
+      '2': { name: 'Quick Press Key', type: 'sequence', sequence: [
+        { delay: 0, lift: 960, tilt: 1515, gripper: 2330 },
+        { delay: 500, lift: 1400, tilt: null, gripper: null },
+        { delay: 500, lift: 1200, tilt: null, gripper: null },
+        { delay: 500, lift: 1400, tilt: null, gripper: null },
+        { delay: 500, lift: 1200, tilt: null, gripper: null },
+        { delay: 500, lift: 1400, tilt: null, gripper: null },
+        { delay: 500, lift: 1200, tilt: null, gripper: null }
+      ]},
+      '3': { name: 'Pickup Grasp', type: 'simple', lift: 1000, tilt: 1400, gripper: 2330 },
+      '4': { name: 'Lift Object', type: 'simple', lift: 1400, tilt: 1400, gripper: 2330 },
+      '5': { name: 'High Position', type: 'simple', lift: 1600, tilt: 1400, gripper: 2330 },
+      '6': { name: 'Drop Position', type: 'simple', lift: 1200, tilt: 1400, gripper: 500 },
+      '7': { name: 'Locate The Capture', type: 'simple', lift: 1200, tilt: 1400, gripper: 500 },
+      '8': { name: 'Ready To Capture', type: 'simple', lift: 1630, tilt: 1400, gripper: 500 },
+      '9': { name: 'Try To Pick', type: 'sequence', sequence: [
+        { delay: 0, lift: null, tilt: null, gripper: 2330 },
+        { delay: 500, lift: 1200, tilt: null, gripper: null }
+      ]},
+      '0': { name: 'Default Just Hold', type: 'simple', lift: 1100, tilt: 1890, gripper: null },
+      // Single servo presets
+      'i': { name: 'Lift Highest', type: 'simple', lift: 960, tilt: null, gripper: null },
+      'j': { name: 'Lift Middle', type: 'simple', lift: 1350, tilt: null, gripper: null },
+      'n': { name: 'Lift Lowest', type: 'simple', lift: 1630, tilt: null, gripper: null },
+      'u': { name: 'Tilt Highest', type: 'simple', lift: null, tilt: 1890, gripper: null },
+      'h': { name: 'Tilt Middle', type: 'simple', lift: null, tilt: 1580, gripper: null },
+      'b': { name: 'Tilt Lowest', type: 'simple', lift: null, tilt: 1515, gripper: null },
+      '-': { name: 'Close Gripper Only', type: 'simple', lift: null, tilt: null, gripper: 2330 },
+      '=': { name: 'Open Gripper Only', type: 'simple', lift: null, tilt: null, gripper: 500 }
     }
     
     // External dependencies (to be injected)
@@ -47,6 +94,7 @@ class KeyboardControls {
     this.stopMovement = null
     this.setServoPWM = null
     this.updateSliderValue = null
+    this.setSpeed = null  // Function to set speed on server
     
     this.initialized = false
   }
@@ -59,6 +107,7 @@ class KeyboardControls {
    * @param {Function} dependencies.stopMovement - Function to stop all movement
    * @param {Function} dependencies.setServoPWM - Function to set servo PWM (servo, value)
    * @param {Function} dependencies.updateSliderValue - Function to update slider display (servo, value)
+   * @param {Function} dependencies.setSpeed - Function to set speed level on server
    */
   init(dependencies) {
     if (!dependencies.setMotors || !dependencies.isSystemPaused || !dependencies.stopMovement ||
@@ -72,12 +121,22 @@ class KeyboardControls {
     this.stopMovement = dependencies.stopMovement
     this.setServoPWM = dependencies.setServoPWM
     this.updateSliderValue = dependencies.updateSliderValue
+    this.setSpeed = dependencies.setSpeed || this.defaultSetSpeed
     
     this.bindEvents()
     this.initialized = true
     
-    console.log('KeyboardControls: Initialized successfully with servo control')
+    console.log('KeyboardControls: Initialized successfully with direct speed control')
+    console.log('Controls: WASD=move, [=slow, }=moderate, \\=fast, I/J/N=lift, U/H/B=tilt, -=close/=open, 0-9=presets')
     return true
+  }
+  
+  /**
+   * Default setSpeed function if not provided
+   */
+  defaultSetSpeed(level) {
+    console.warn('KeyboardControls: setSpeed function not provided, using AJAX fallback')
+    $.ajax({url: "set_speed/" + level})
   }
   
   /**
@@ -93,23 +152,55 @@ class KeyboardControls {
    * @param {Event} e - Keyboard event
    */
   handleKeyDown(e) {
-    // Skip keyboard controls if user is typing in an input field
-    if ($(e.target).is('input, textarea, select')) {
+    // Skip keyboard controls if user is typing in text input fields, but allow sliders
+    if ($(e.target).is('input[type="text"], input[type="password"], input[type="email"], textarea, select')) {
       return
     }
     
-    const key = e.key.toLowerCase()
+    const key = e.key
+    
+    // Handle speed switching keys - direct speed selection
+    if (key === '[') {
+      if (!this.isSystemPaused()) {
+        this.setSpeedDirect('slow')
+      }
+      e.preventDefault()
+      return
+    }
+    
+    if (key === ']') {
+      if (!this.isSystemPaused()) {
+        this.setSpeedDirect('moderate')
+      }
+      e.preventDefault()
+      return
+    }
+    
+    if (key === '\\') {
+      if (!this.isSystemPaused()) {
+        this.setSpeedDirect('fast')
+      }
+      e.preventDefault()
+      return
+    }
+    
+    // Handle all preset keys - immediate actions, not held
+    if (['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'i', 'j', 'n', 'u', 'h', 'b', '-', '='].includes(key)) {
+      if (!this.isSystemPaused()) {
+        this.executePreset(key)
+      }
+      e.preventDefault()
+      return
+    }
+    
+    // Handle other keys - only movement keys now use gradual control
     if (key in this.keys_pressed && !this.keys_pressed[key]) {
       this.keys_pressed[key] = true
       
       if (!this.isSystemPaused()) {
-        // Handle movement keys
+        // Handle movement keys - only WASD remain for gradual control
         if (['w', 'a', 's', 'd'].includes(key)) {
           this.updateMovementFromKeys()
-        }
-        // Handle servo keys - start continuous updates
-        else if (['q', 'e', 'r', 't', 'z', 'c'].includes(key)) {
-          this.startContinuousServoUpdates()
         }
       }
       e.preventDefault()
@@ -121,22 +212,24 @@ class KeyboardControls {
    * @param {Event} e - Keyboard event
    */
   handleKeyUp(e) {
-    // Skip keyboard controls if user is typing in an input field
-    if ($(e.target).is('input, textarea, select')) {
+    // Skip keyboard controls if user is typing in text input fields, but allow sliders
+    if ($(e.target).is('input[type="text"], input[type="password"], input[type="email"], textarea, select')) {
       return
     }
     
-    const key = e.key.toLowerCase()
+    const key = e.key
+    
+    // Ignore speed switching and preset keys for keyup
+    if (['[', ']', '\\', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'i', 'j', 'n', 'u', 'h', 'b', '-', '='].includes(key)) {
+      return
+    }
+    
     if (key in this.keys_pressed && this.keys_pressed[key]) {
       this.keys_pressed[key] = false
       
-      // Handle movement keys
+      // Handle movement keys - only WASD remain for gradual control
       if (['w', 'a', 's', 'd'].includes(key)) {
         this.updateMovementFromKeys()
-      }
-      // Handle servo keys - check if we should stop continuous updates
-      else if (['q', 'e', 'r', 't', 'z', 'c'].includes(key)) {
-        this.checkContinuousServoUpdates()
       }
       
       e.preventDefault()
@@ -144,109 +237,96 @@ class KeyboardControls {
   }
   
   /**
-   * Update motor movement based on currently pressed keys
+   * Set speed directly to a specific level
+   * @param {string} speedLevel - Target speed level ('slow', 'moderate', 'fast')
    */
-  updateMovementFromKeys() {
+  setSpeedDirect(speedLevel) {
+    if (!this.speed_levels.includes(speedLevel)) {
+      console.warn(`KeyboardControls: Invalid speed level: ${speedLevel}`)
+      return
+    }
+    
+    // Update internal speed index
+    this.current_speed_index = this.speed_levels.indexOf(speedLevel)
+    
+    // Set speed on server
+    this.setSpeed(speedLevel)
+    
+    // Show feedback
+    const keyMap = { slow: '[ (Slow)', moderate: '] (Moderate)', fast: '\\ (Fast)' }
+    this.showSpeedFeedback(speedLevel, keyMap[speedLevel])
+    
+    console.log(`KeyboardControls: Speed set directly to ${speedLevel}`)
+  }
+  
+  /**
+   * Show speed change feedback
+   * @param {string} speedLevel - Current speed level
+   * @param {string} action - Action description
+   */
+  showSpeedFeedback(speedLevel, action) {
+    // Create a temporary speed status message
+    const statusMsg = $(`<div class="speed-feedback">Speed: ${speedLevel.toUpperCase()} ${action}</div>`)
+    statusMsg.css({
+      position: 'fixed',
+      top: '60px',  // Below preset feedback
+      right: '20px',
+      background: '#2196F3',  // Blue color for speed
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      zIndex: 1000,
+      fontSize: '14px',
+      fontWeight: 'bold'
+    })
+    
+    $('body').append(statusMsg)
+    
+    // Remove after 2 seconds
+    setTimeout(() => {
+      statusMsg.fadeOut(300, () => statusMsg.remove())
+    }, 2000)
+  }
+  
+  /**
+   * Sync with external speed changes (called from script.js when speed buttons are clicked)
+   * @param {string} speedLevel - New speed level from server
+   */
+  syncSpeedLevel(speedLevel) {
+    const index = this.speed_levels.indexOf(speedLevel)
+    if (index !== -1) {
+      this.current_speed_index = index
+      console.log(`KeyboardControls: Speed synced to ${speedLevel}`)
+    }
+  }
+  
+  /**
+   * Get current speed level
+   * @returns {string} Current speed level
+   */
+  getCurrentSpeed() {
+    return this.speed_levels[this.current_speed_index]
+  }
+  
+  /**
+   * Execute a preset action
+   * @param {string} presetKey - The preset key (1-9, 0, i, j, n, u, h, b, -, =)
+   */
+  executePreset(presetKey) {
     if (!this.initialized) {
       console.warn('KeyboardControls: Not initialized')
       return
     }
     
-    const forward = this.keys_pressed.w
-    const backward = this.keys_pressed.s
-    const left = this.keys_pressed.a
-    const right = this.keys_pressed.d
-    
-    // Check if any movement key is pressed
-    if (!forward && !backward && !left && !right) {
-      this.stopMovement()
+    const preset = this.presets[presetKey]
+    if (!preset) {
+      console.warn(`KeyboardControls: Invalid preset key: ${presetKey}`)
       return
     }
     
-    // If paused, stop movement
-    if (this.isSystemPaused()) {
-      this.stopMovement()
-      return
-    }
+    console.log(`KeyboardControls: Executing preset ${presetKey}: ${preset.name}`)
     
-    // Calculate motor values
-    const motorSpeeds = this.calculateMotorSpeeds(forward, backward, left, right)
-    this.setMotors(motorSpeeds.left, motorSpeeds.right)
-  }
-  
-  /**
-   * Start continuous servo updates when servo keys are pressed
-   */
-  startContinuousServoUpdates() {
-    if (!this.initialized) {
-      console.warn('KeyboardControls: Not initialized')
-      return
-    }
-    
-    // If timer is already running, don't start another one
-    if (this.servo_timer) {
-      return
-    }
-    
-    // Start immediate update
-    this.updateServoFromKeys()
-    
-    // Start continuous updates
-    this.servo_timer = setInterval(() => {
-      if (this.isSystemPaused()) {
-        this.stopContinuousServoUpdates()
-        return
-      }
-      
-      // Check if any servo keys are still pressed
-      const servoKeysPressed = ['q', 'e', 'r', 't', 'z', 'c'].some(key => this.keys_pressed[key])
-      
-      if (servoKeysPressed) {
-        this.updateServoFromKeys()
-      } else {
-        // No servo keys pressed, stop the timer
-        this.stopContinuousServoUpdates()
-      }
-    }, this.servo_update_interval)
-  }
-  
-  /**
-   * Stop continuous servo updates
-   */
-  stopContinuousServoUpdates() {
-    if (this.servo_timer) {
-      clearInterval(this.servo_timer)
-      this.servo_timer = null
-    }
-  }
-  
-  /**
-   * Check if continuous servo updates should continue
-   */
-  checkContinuousServoUpdates() {
-    // Check if any servo keys are still pressed
-    const servoKeysPressed = ['q', 'e', 'r', 't', 'z', 'c'].some(key => this.keys_pressed[key])
-    
-    if (!servoKeysPressed) {
-      // No servo keys pressed, stop continuous updates
-      this.stopContinuousServoUpdates()
-    }
-  }
-  /**
-   * Update servo positions based on currently pressed keys
-   */
-  updateServoFromKeys() {
-    if (!this.initialized) {
-      console.warn('KeyboardControls: Not initialized')
-      return
-    }
-    
-    // If paused, don't update servos
-    if (this.isSystemPaused()) {
-      return
-    }
-    
-    // Get current slider values
+    // Get slider elements
     const liftSlider = document.getElementById('liftSlider')
     const tiltSlider = document.getElementById('tiltSlider')
     const gripperSlider = document.getElementById('gripperSlider')
@@ -256,93 +336,180 @@ class KeyboardControls {
       return
     }
     
-    // Handle lift control (Q/E keys)
-    if (this.keys_pressed.q || this.keys_pressed.e) {
-      let currentLift = parseInt(liftSlider.value)
-      const range = this.pwm_ranges.lift
-      
-      if (this.keys_pressed.q) {
-        // Q key: increase lift value (lift up)
-        currentLift = Math.min(range.max, currentLift + this.servo_step)
-      } else if (this.keys_pressed.e) {
-        // E key: decrease lift value (lift down)
-        currentLift = Math.max(range.min, currentLift - this.servo_step)
+    if (preset.type === 'simple') {
+      // Simple preset - immediate servo positions
+      if (preset.lift !== null && preset.lift !== undefined) {
+        liftSlider.value = preset.lift
+        this.updateSliderValue('lift', preset.lift)
+        this.setServoPWM('lift', preset.lift)
       }
       
-      // Update slider and servo
-      liftSlider.value = currentLift
-      this.updateSliderValue('lift', currentLift)
-      this.setServoPWM('lift', currentLift)
+      if (preset.tilt !== null && preset.tilt !== undefined) {
+        tiltSlider.value = preset.tilt
+        this.updateSliderValue('tilt', preset.tilt)
+        this.setServoPWM('tilt', preset.tilt)
+      }
+      
+      if (preset.gripper !== null && preset.gripper !== undefined) {
+        gripperSlider.value = preset.gripper
+        this.updateSliderValue('gripper', preset.gripper)
+        this.setServoPWM('gripper', preset.gripper)
+      }
+    } else if (preset.type === 'sequence') {
+      // Sequence preset - execute steps with delays
+      this.executeSequence(preset.sequence)
     }
     
-    // Handle tilt control (R/T keys)
-    if (this.keys_pressed.r || this.keys_pressed.t) {
-      let currentTilt = parseInt(tiltSlider.value)
-      const range = this.pwm_ranges.tilt
-      
-      if (this.keys_pressed.r) {
-        // R key: increase tilt value (tilt up/back)
-        currentTilt = Math.min(range.max, currentTilt + this.servo_step)
-      } else if (this.keys_pressed.t) {
-        // T key: decrease tilt value (tilt down/forward)
-        currentTilt = Math.max(range.min, currentTilt - this.servo_step)
-      }
-      
-      // Update slider and servo
-      tiltSlider.value = currentTilt
-      this.updateSliderValue('tilt', currentTilt)
-      this.setServoPWM('tilt', currentTilt)
-    }
+    // Show feedback to user
+    this.showPresetFeedback(presetKey, preset.name)
+  }
+  
+  /**
+   * Execute a sequence of servo movements
+   * @param {Array} sequence - Array of movement steps
+   */
+  executeSequence(sequence) {
+    const liftSlider = document.getElementById('liftSlider')
+    const tiltSlider = document.getElementById('tiltSlider')
+    const gripperSlider = document.getElementById('gripperSlider')
     
-    // Handle gripper control (Z/C keys)
-    if (this.keys_pressed.z || this.keys_pressed.c) {
-      let currentGripper = parseInt(gripperSlider.value)
-      const range = this.pwm_ranges.gripper
-      
-      if (this.keys_pressed.z) {
-        // Z key: decrease gripper value (close gripper)
-        currentGripper = Math.max(range.min, currentGripper - this.servo_step)
-      } else if (this.keys_pressed.c) {
-        // C key: increase gripper value (open gripper)
-        currentGripper = Math.min(range.max, currentGripper + this.servo_step)
+    sequence.forEach((step, index) => {
+      setTimeout(() => {
+        if (step.lift !== null && step.lift !== undefined) {
+          liftSlider.value = step.lift
+          this.updateSliderValue('lift', step.lift)
+          this.setServoPWM('lift', step.lift)
+        }
+        
+        if (step.tilt !== null && step.tilt !== undefined) {
+          tiltSlider.value = step.tilt
+          this.updateSliderValue('tilt', step.tilt)
+          this.setServoPWM('tilt', step.tilt)
+        }
+        
+        if (step.gripper !== null && step.gripper !== undefined) {
+          gripperSlider.value = step.gripper
+          this.updateSliderValue('gripper', step.gripper)
+          this.setServoPWM('gripper', step.gripper)
+        }
+      }, step.delay)
+    })
+  }
+  
+  /**
+   * Show feedback when preset is executed
+   * @param {string} presetKey - The preset key
+   * @param {string} presetName - The preset name
+   */
+  showPresetFeedback(presetKey, presetName) {
+    // Create a temporary status message
+    const statusMsg = $(`<div class="preset-feedback">Preset ${presetKey}: ${presetName}</div>`)
+    statusMsg.css({
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      background: '#4CAF50',
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      zIndex: 1000,
+      fontSize: '14px',
+      fontWeight: 'bold'
+    })
+    
+    $('body').append(statusMsg)
+    
+    // Remove after 2 seconds
+    setTimeout(() => {
+      statusMsg.fadeOut(300, () => statusMsg.remove())
+    }, 2000)
+  }
+  
+  /**
+   * Update motor movement based on currently pressed keys
+   * Now uses server endpoints to respect speed settings
+   */
+  updateMovementFromKeys() {
+    if (!this.initialized) {
+      console.warn('KeyboardControls: Not initialized')
+      return
+    }
+
+    const forward = this.keys_pressed.w
+    const backward = this.keys_pressed.s
+    const left = this.keys_pressed.a
+    const right = this.keys_pressed.d
+
+    // Check if any movement key is pressed
+    if (!forward && !backward && !left && !right) {
+      this.stopMovement()
+      return
+    }
+
+    // If paused, stop movement
+    if (this.isSystemPaused()) {
+      this.stopMovement()
+      return
+    }
+
+    // Determine movement type and call appropriate server endpoint
+    // Priority: Forward/backward first, then rotation
+    if (forward && !backward) {
+      if (left && !right) {
+        // Forward + Left = Forward with left bias (use joystick for this)
+        this.setMotorsWithSpeedFactor(150, 50)
+      } else if (right && !left) {
+        // Forward + Right = Forward with right bias (use joystick for this)  
+        this.setMotorsWithSpeedFactor(50, 150)
+      } else {
+        // Pure forward
+        $.ajax({url: "move_forward"})
       }
-      
-      // Update slider and servo
-      gripperSlider.value = currentGripper
-      this.updateSliderValue('gripper', currentGripper)
-      this.setServoPWM('gripper', currentGripper)
+    } else if (backward && !forward) {
+      if (left && !right) {
+        // Backward + Left = Backward with left bias (use joystick for this)
+        this.setMotorsWithSpeedFactor(-150, -50)
+      } else if (right && !left) {
+        // Backward + Right = Backward with right bias (use joystick for this)
+        this.setMotorsWithSpeedFactor(-50, -150)
+      } else {
+        // Pure backward
+        $.ajax({url: "move_backward"})
+      }
+    } else if (left && !right) {
+      // Pure left rotation
+      $.ajax({url: "rotate_left"})
+    } else if (right && !left) {
+      // Pure right rotation
+      $.ajax({url: "rotate_right"})
     }
   }
-  calculateMotorSpeeds(forward, backward, left, right) {
-    let left_motor = 0
-    let right_motor = 0
-    
-    // Forward/backward movement
-    if (forward && !backward) {
-      left_motor += this.base_strength
-      right_motor += this.base_strength
-    } else if (backward && !forward) {
-      left_motor -= this.base_strength
-      right_motor -= this.base_strength
+
+  /**
+   * Helper function for complex movements that need joystick-style control
+   * This respects the current speed setting by applying the same factors as robot_button.py
+   */
+  setMotorsWithSpeedFactor(leftBase, rightBase) {
+    // Get current speed factor (matches robot_button.py constants)
+    let speedFactor
+    const currentSpeed = this.speed_levels[this.current_speed_index]
+    switch(currentSpeed) {
+      case "slow":
+        speedFactor = 0.3
+        break
+      case "moderate":
+        speedFactor = 0.5
+        break
+      case "fast":
+      default:
+        speedFactor = 0.9
+        break
     }
     
-    // Left/right rotation (can combine with forward/backward)
-    if (left && !right) {
-      left_motor -= this.base_strength * this.rotation_factor
-      right_motor += this.base_strength * this.rotation_factor
-    } else if (right && !left) {
-      left_motor += this.base_strength * this.rotation_factor
-      right_motor -= this.base_strength * this.rotation_factor
-    }
+    const leftAdjusted = Math.round(leftBase * speedFactor)
+    const rightAdjusted = Math.round(rightBase * speedFactor)
     
-    // Limit motor values to valid range
-    left_motor = Math.max(-200, Math.min(200, left_motor))
-    right_motor = Math.max(-200, Math.min(200, right_motor))
-    
-    return {
-      left: Math.round(left_motor),
-      right: Math.round(right_motor)
-    }
+    this.setMotors(leftAdjusted, rightAdjusted)
   }
   
   /**
@@ -353,8 +520,84 @@ class KeyboardControls {
    * @param {boolean} right - D key pressed
    * @returns {Object} Motor speeds {left, right}
    */
+  calculateMotorSpeeds(forward, backward, left, right) {
+    let left_motor = 0
+    let right_motor = 0
+    
+    // Get speed factor based on current speed setting (matches robot_button.py)
+    let speedFactor
+    const currentSpeed = this.speed_levels[this.current_speed_index]
+    switch(currentSpeed) {
+      case "slow":
+        speedFactor = 0.3
+        break
+      case "moderate":
+        speedFactor = 0.5
+        break
+      case "fast":
+      default:
+        speedFactor = 0.9
+        break
+    }
+    
+    // Apply speed factor to base strength
+    const adjustedStrength = Math.round(this.base_strength * speedFactor)
+    const adjustedRotation = Math.round(this.base_strength * this.rotation_factor * speedFactor)
+    
+    // Forward/backward movement
+    if (forward && !backward) {
+      left_motor += adjustedStrength
+      right_motor += adjustedStrength
+    } else if (backward && !forward) {
+      left_motor -= adjustedStrength
+      right_motor -= adjustedStrength
+    }
+    
+    // Left/right rotation (can combine with forward/backward)
+    if (left && !right) {
+      left_motor -= adjustedRotation
+      right_motor += adjustedRotation
+    } else if (right && !left) {
+      left_motor += adjustedRotation
+      right_motor -= adjustedRotation
+    }
+    
+    // Limit motor values to valid range (-400 to 400, matching joystick)
+    left_motor = Math.max(-400, Math.min(400, left_motor))
+    right_motor = Math.max(-400, Math.min(400, right_motor))
+    
+    return {
+      left: Math.round(left_motor),
+      right: Math.round(right_motor)
+    }
+  }
+  
+  /**
+   * Get current key states
+   * @returns {Object} Current key states
+   */
   getKeyStates() {
     return { ...this.keys_pressed }
+  }
+  
+  /**
+   * Get preset configurations
+   * @returns {Object} Preset configurations
+   */
+  getPresets() {
+    return { ...this.presets }
+  }
+  
+  /**
+   * Update a preset configuration
+   * @param {string} presetKey - Preset key (1-9, 0, etc.)
+   * @param {Object} preset - Preset configuration
+   */
+  updatePreset(presetKey, preset) {
+    if (presetKey in this.presets) {
+      this.presets[presetKey] = { ...preset }
+      console.log(`KeyboardControls: Updated preset ${presetKey}: ${preset.name}`)
+    }
   }
   
   /**
@@ -384,13 +627,11 @@ class KeyboardControls {
    * Emergency stop - immediately stop all movement and reset keys
    */
   emergencyStop() {
-    // Stop continuous servo updates
-    this.stopContinuousServoUpdates()
-    
-    // Reset all key states
-    Object.keys(this.keys_pressed).forEach(key => {
-      this.keys_pressed[key] = false
-    })
+    // Reset movement key states only
+    this.keys_pressed.w = false
+    this.keys_pressed.a = false
+    this.keys_pressed.s = false
+    this.keys_pressed.d = false
     
     // Stop movement
     if (this.stopMovement) {
@@ -402,9 +643,6 @@ class KeyboardControls {
    * Cleanup - remove event listeners and stop timers
    */
   destroy() {
-    // Stop continuous servo updates
-    this.stopContinuousServoUpdates()
-    
     // Remove event listeners
     $(document).off("keydown keyup")
     this.initialized = false

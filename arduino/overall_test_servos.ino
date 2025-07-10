@@ -1,6 +1,6 @@
 #include <Servo.h>
 
-Servo liftServo;    // Pin 21, max-1506-down, min-1000-up, mid-1550-mid
+Servo liftServo;    // Pin 21, max-1506-down, min-960-up, mid-1550-mid
 Servo tiltServo;    // Pin 22, max-1890-up, min-1515-down, mid-1500-flat
 Servo gripperServo; // Pin 11, max-2330-close, min-500-open, mid-1440-semiopen
 
@@ -43,7 +43,7 @@ void loop() {
     }
     else if (cmd == "lift" && servosAttached) {
       Serial.println("Moving to LIFT position...");
-      liftServo.writeMicroseconds(1000);   // up
+      liftServo.writeMicroseconds(960);   // up
       tiltServo.writeMicroseconds(1890);   // up
       gripperServo.writeMicroseconds(2330); // close
     }

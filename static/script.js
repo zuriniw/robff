@@ -22,6 +22,10 @@ let respeaker_status = {}
 
 // Keyboard controls instance
 let keyboardControls = null
+let gamepadControls = null
+
+let last_motor_command_time = 0
+const motor_command_min_interval = 30  // ms
 
 // ============================================================================
 // INITIALIZATION
@@ -41,6 +45,7 @@ function init() {
   initRotationButtons()
   initSpeedButtons()
   initKeyboardControls()
+  initGamepadControls()
   initRecordingButton()
   initServoButtons()
   initPauseButton()
@@ -177,6 +182,7 @@ function initSpeedButtons() {
   })
 }
 
+
 function setSpeed(level) {
   if (is_paused) return
   
@@ -187,6 +193,11 @@ function setSpeed(level) {
   // Set current speed and update server
   current_speed = level
   $.ajax({url: "set_speed/" + level})
+  
+  // Sync with keyboard controls if initialized
+  if (keyboardControls && keyboardControls.initialized) {
+    keyboardControls.syncSpeedLevel(level)
+  }
 }
 
 // ============================================================================
@@ -244,7 +255,7 @@ function initRotationButtons() {
 }
 
 // ============================================================================
-// MOVEMENT CONTROL - KEYBOARD (使用分离的模块)
+// MOVEMENT CONTROL - KEYBOARD (使用分离的模块) - UPDATED WITH SPEED SWITCHING
 // ============================================================================
 
 function initKeyboardControls() {
@@ -257,13 +268,14 @@ function initKeyboardControls() {
   // 创建键盘控制实例
   keyboardControls = new KeyboardControls()
   
-  // 初始化键盘控制，传入所需的依赖函数
+  // 初始化键盘控制，传入所需的依赖函数（包括速度设置函数）
   const success = keyboardControls.init({
     setMotors: setMotors,
     isSystemPaused: () => is_paused,
     stopMovement: () => $.ajax({url: "stop_movement"}),
     setServoPWM: setServoPWM,
-    updateSliderValue: updateSliderValue
+    updateSliderValue: updateSliderValue,
+    setSpeed: setSpeed  // NEW: 传入速度设置函数
   })
   
   if (!success) {
@@ -272,17 +284,59 @@ function initKeyboardControls() {
   } else {
     // 设置自定义参数（可选）
     keyboardControls.setParameters({
-      servoStep: 30,              // 每次按键的PWM步进值
+      servoStep: 50,              // 每次按键的PWM步进值
       servoUpdateInterval: 50     // 伺服更新间隔（毫秒）
     })
     
-    console.log('Keyboard controls initialized with servo support:')
+    // 同步当前速度设置
+    keyboardControls.syncSpeedLevel(current_speed)
+    
+    console.log('Keyboard controls initialized with servo and speed control:')
     console.log('  WASD: Movement control')
+    console.log('  [/]: Speed down/up')
     console.log('  Q/E: Lift up/down')
     console.log('  Z/C: Gripper close/open')
+    console.log('  0-9: Servo presets')
   }
 }
 
+
+// ============================================================================
+// GAMEPAD CONTROL INITIALIZATION
+// ============================================================================
+
+function initGamepadControls() {
+  // 确保 GamepadControls 类已加载
+  if (typeof GamepadControls === 'undefined') {
+    console.error('GamepadControls class not found. Make sure gamepad_control.js is loaded.')
+    return
+  }
+  
+  // 创建手柄控制实例
+  gamepadControls = new GamepadControls()
+  
+  // 初始化手柄控制，传入所需的依赖函数和宏
+  const success = gamepadControls.init({
+    setMotors: setMotors,
+    isSystemPaused: () => is_paused,
+    stopMovement: () => $.ajax({url: "stop_movement"}),
+    setServoPWM: setServoPWM,
+    updateSliderValue: updateSliderValue,
+    servoMacros: {
+      capture: servoCapture,
+      lift: servoLift,
+      grip: servoGrip,
+      hold: servoHold
+    }
+  })
+  
+  if (!success) {
+    console.error('Failed to initialize gamepad controls')
+    gamepadControls = null
+  } else {
+    console.log('8BitDo Pro 2 gamepad controls initialized')
+  }
+}
 // ============================================================================
 // MOVEMENT CONTROL - JOYSTICK
 // ============================================================================
@@ -370,6 +424,13 @@ function setMotors(left, right) {
     left = 0
     right = 0
   }
+  
+  // Throttle motor commands to prevent conflicts
+  const now = Date.now()
+  if (now - last_motor_command_time < motor_command_min_interval) {
+    return
+  }
+  last_motor_command_time = now
   
   // Update motor display above joystick
   $("#motor-display").text("Motors: " + left + " " + right)
@@ -637,6 +698,11 @@ function update_status(json) {
     current_speed = s["speed_level"]
     $(".speed-btn").removeClass("speed-active")
     $("#" + current_speed + "-btn").addClass("speed-active")
+    
+    // Sync with keyboard controls if initialized - NEW
+    if (keyboardControls && keyboardControls.initialized) {
+      keyboardControls.syncSpeedLevel(current_speed)
+    }
   }
 
   // Sync pause state with server
