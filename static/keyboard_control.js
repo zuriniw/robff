@@ -10,20 +10,21 @@
  * Updated with servo control mappings and presets
  * Added spacebar pause toggle functionality
  * Enhanced with composite movement support (W+A, W+D, S+A, S+D)
+ * Added T key for 11-second countdown timer
  */
 
 class KeyboardControls {
   constructor() {
-    // 完整保留所有按键状态跟踪（包括原版中的所有按键）
     this.keys_pressed = {
       w: false,
       a: false,
       s: false,
       d: false,
+      t: false,           // 11秒倒计时
       i: false,           // lift up
-      k: false,           // lift down (保留原功能)
-      ArrowUp: false,     // tilt up (保留原功能)
-      ArrowDown: false,   // tilt down (保留原功能)
+      k: false,           // lift down 
+      ArrowUp: false,     // tilt up 
+      ArrowDown: false,   // tilt down 
       '1': false,         // preset 1
       '2': false,         // preset 2
       '3': false,         // preset 3
@@ -34,14 +35,14 @@ class KeyboardControls {
       '8': false,         // preset 8
       '9': false,         // preset 9
       '0': false,         // preset 0
-      'j': false,         // lift middle (保留)
-      'n': false,         // lift lowest (保留)
-      'u': false,         // tilt highest (保留)
-      'h': false,         // tilt middle (保留)
-      'b': false,         // tilt lowest (保留)
-      '-': false,         // close gripper (保留)
-      '=': false          // open gripper (保留)
-      // Note: '[', ']', '\\', and ' ' (spacebar) keys are immediate actions
+      'g': false,         // gesture sequence
+      'j': false,         // lift middle 
+      'n': false,         // lift lowest 
+      'u': false,         // tilt highest 
+      'h': false,         // tilt middle 
+      'b': false,         // tilt lowest
+      '-': false,         // close gripper 
+      '=': false          // open gripper
     }
     
     // Movement parameters (保持原始值)
@@ -58,6 +59,9 @@ class KeyboardControls {
     this.last_servo_update = 0
     this.servo_timer = null  // Timer for continuous servo updates
     
+    // Timer for countdown
+    this.countdownInterval = null
+    
     // PWM ranges for each servo (完全保留原值)
     this.pwm_ranges = {
       lift: { min: 960, max: 1630, mid: 1350 },
@@ -67,13 +71,13 @@ class KeyboardControls {
     
     // Preset actions configuration (完全保留原配置)
     this.presets = {
-      '1': { name: 'Ready To Push Box', type: 'simple', lift: 1506, tilt: 1890, gripper: 500 },
+      '1': { name: 'Ready To Push Box', type: 'simple', lift: 960, tilt: 1890, gripper: 500 },
       '2': { name: 'Quick Press Key', type: 'sequence', sequence: [
         { delay: 0, lift: 1150, tilt: 1510, gripper: 2330 },
         { delay: 500, lift: 1280, tilt: 1510, gripper: null },
-        { delay: 500, lift: 1150, tilt: 1510, gripper: null },
-        { delay: 500, lift: 1280, tilt: 1510, gripper: null },
-        { delay: 500, lift: 1150, tilt: 1510, gripper: null },
+        { delay: 1000, lift: 1150, tilt: 1510, gripper: null },
+        { delay: 1500, lift: 1280, tilt: 1510, gripper: null },
+        { delay: 2000, lift: 1150, tilt: 1510, gripper: null },
       ]},
       '3': { name: 'Pickup Grasp', type: 'simple', lift: 1000, tilt: 1550, gripper: 2330 },
       '4': { name: 'Lift Object', type: 'simple', lift: 1400, tilt: 1650, gripper: 2330 },
@@ -82,8 +86,8 @@ class KeyboardControls {
       '7': { name: 'Locate The Capture', type: 'simple', lift: 1200, tilt: 1600, gripper: 500 },
       '8': { name: 'Ready To Capture', type: 'simple', lift: 1630, tilt: 1515, gripper: 500 },
       '9': { name: 'Try To Pick', type: 'sequence', sequence: [
-        { delay: 0, lift: null, tilt: null, gripper: 2330 },
-        { delay: 500, lift: 1200, tilt: null, gripper: null }
+        { delay: 0, lift: 1630, tilt: 1515, gripper: 2330 },
+        { delay: 500, lift: 1200, tilt: 1515, gripper: 2330 }
       ]},
       '0': { name: 'Default Just Hold', type: 'simple', lift: 1100, tilt: 1890, gripper: null },
       // Single servo presets (保留所有原有预设)
@@ -93,6 +97,13 @@ class KeyboardControls {
       'u': { name: 'Tilt Highest', type: 'simple', lift: null, tilt: 1890, gripper: null },
       'h': { name: 'Tilt Middle', type: 'simple', lift: null, tilt: 1580, gripper: null },
       'b': { name: 'Tilt Lowest', type: 'simple', lift: null, tilt: 1210, gripper: null },
+      'g': { name: 'Gesture', type: 'sequence', sequence: [
+        { delay: 500, lift: 1150, tilt: 1890, gripper: 2330 },
+        { delay: 1500, lift: 1250, tilt: 1510, gripper: 2330 },
+        { delay: 2500, lift: 1150, tilt: 1890, gripper: 2330 },
+        { delay: 3500, lift: 1250, tilt: 1510, gripper: 2330 },
+        { delay: 4500, lift: 1150, tilt: 1890, gripper: 2330 },
+      ]},
       '-': { name: 'Close Gripper Only', type: 'simple', lift: null, tilt: null, gripper: 2330 },
       '=': { name: 'Open Gripper Only', type: 'simple', lift: null, tilt: null, gripper: 500 }
     }
@@ -131,7 +142,7 @@ class KeyboardControls {
     this.initialized = true
     
     console.log('KeyboardControls: Initialized successfully with composite movement support')
-    console.log('Controls: WASD=move (supports combinations), [/]=speed, SPACEBAR=pause/resume, I/J/N=lift, U/H/B=tilt, -/==gripper, 0-9=presets')
+    console.log('Controls: WASD=move (supports combinations), [/]=speed, T=11s countdown, SPACEBAR=pause/resume, I/J/N=lift, U/H/B=tilt, -/==gripper, 0-9=presets')
     return true
   }
   
@@ -207,8 +218,17 @@ class KeyboardControls {
       return
     }
     
+    // Handle countdown timer - T key
+    if (key === 't' || key === 'T') {
+      if (!this.isSystemPaused()) {
+        this.startCountdown(11)
+      }
+      e.preventDefault()
+      return
+    }
+    
     // Handle preset keys - immediate actions (保持原逻辑)
-    if (['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'i', 'j', 'n', 'u', 'h', 'b', '-', '='].includes(key)) {
+    if (['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'g', 'i', 'j', 'n', 'u', 'h', 'b', '-', '='].includes(key)) {
       if (!this.isSystemPaused()) {
         this.executePreset(key)
       }
@@ -224,11 +244,6 @@ class KeyboardControls {
         // Handle movement keys with new composite logic
         if (['w', 'a', 's', 'd'].includes(key)) {
           this.updateMovementFromKeys()
-        }
-        
-        // 保留原始的连续伺服控制逻辑（如果存在）
-        if (['i', 'k', 'ArrowUp', 'ArrowDown'].includes(key)) {
-          this.startContinuousServoControl(key)
         }
       }
       e.preventDefault()
@@ -253,7 +268,7 @@ class KeyboardControls {
     const key = e.key
     
     // Ignore immediate action keys for keyup
-    if (['[', ']', '\\', ' ', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].includes(key)) {
+    if (['[', ']', '\\', ' ', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 't', 'T','g'].includes(key)) {
       return
     }
     
@@ -265,33 +280,8 @@ class KeyboardControls {
         this.updateMovementFromKeys()
       }
       
-      // 停止连续伺服控制
-      if (['i', 'k', 'ArrowUp', 'ArrowDown'].includes(key)) {
-        this.stopContinuousServoControl(key)
-      }
-      
       e.preventDefault()
     }
-  }
-  
-  /**
-   * 新增：连续伺服控制（如果原版有这个功能的话）
-   */
-  startContinuousServoControl(key) {
-    // 如果原版本有连续伺服控制，在这里实现
-    // 否则就作为即时预设处理
-    if (['i', 'k', 'ArrowUp', 'ArrowDown'].includes(key)) {
-      // 可以在这里添加连续控制逻辑，或者保持为即时动作
-      console.log(`Continuous servo control started for key: ${key}`)
-    }
-  }
-  
-  /**
-   * 新增：停止连续伺服控制
-   */
-  stopContinuousServoControl(key) {
-    // 对应的停止逻辑
-    console.log(`Continuous servo control stopped for key: ${key}`)
   }
   
   /**
@@ -399,7 +389,7 @@ class KeyboardControls {
   }
   
   /**
-   * Execute preset (完全保持原逻辑)
+   * Execute preset (Enhanced with gesture auto-timer)
    */
   executePreset(presetKey) {
     if (!this.initialized) {
@@ -445,10 +435,22 @@ class KeyboardControls {
       }
     } else if (preset.type === 'sequence') {
       this.executeSequence(preset.sequence)
+      
+      // 🆕 Auto-start 11s countdown after gesture sequence completes
+      if (presetKey === 'g') {
+        setTimeout(() => {
+          console.log('KeyboardControls: Gesture complete → Auto-starting 11s countdown')
+          this.startCountdown(11)
+          
+          // Show feedback for auto-timer activation
+          this.showAutoTimerFeedback()
+        }, 4600) // Your sequence ends at 4500ms + 100ms buffer
+      }
     }
     
     this.showPresetFeedback(presetKey, preset.name)
   }
+
   
   /**
    * Execute sequence (保持不变)
@@ -488,6 +490,92 @@ class KeyboardControls {
     if (typeof $ === 'undefined') return // 安全检查
     
     const statusMsg = $(`<div class="preset-feedback">Preset ${presetKey}: ${presetName}</div>`)
+    statusMsg.css({
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      background: '#4CAF50',
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      zIndex: 1000,
+      fontSize: '14px',
+      fontWeight: 'bold'
+    })
+    
+    $('body').append(statusMsg)
+    
+    setTimeout(() => {
+      statusMsg.fadeOut(300, () => statusMsg.remove())
+    }, 2000)
+  }
+  
+  /**
+   * Start countdown timer
+   */
+  startCountdown(seconds) {
+    // 清除之前的倒计时（如果有）
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval)
+    }
+    
+    let remainingSeconds = seconds
+    
+    // 显示初始倒计时
+    this.showCountdownFeedback(remainingSeconds)
+    
+    // 每秒更新一次
+    this.countdownInterval = setInterval(() => {
+      remainingSeconds--
+      
+      if (remainingSeconds > 0) {
+        this.showCountdownFeedback(remainingSeconds)
+      } else {
+        // 倒计时结束
+        clearInterval(this.countdownInterval)
+        this.countdownInterval = null
+        this.showCountdownComplete()
+      }
+    }, 1000)
+    
+    console.log(`KeyboardControls: Started ${seconds}s countdown`)
+  }
+  
+  /**
+   * Show countdown feedback
+   */
+  showCountdownFeedback(seconds) {
+    if (typeof $ === 'undefined') return
+    
+    // 移除之前的倒计时显示
+    $('.countdown-feedback').remove()
+    
+    const statusMsg = $(`<div class="countdown-feedback">Countdown: ${seconds}s</div>`)
+    statusMsg.css({
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      background: seconds <= 3 ? '#FF5722' : '#2196F3',  // 最后3秒变红
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      zIndex: 1000,
+      fontSize: '14px',
+      fontWeight: 'bold'
+    })
+    
+    $('body').append(statusMsg)
+  }
+  
+  /**
+   * Show countdown complete message
+   */
+  showCountdownComplete() {
+    if (typeof $ === 'undefined') return
+    
+    $('.countdown-feedback').remove()
+    
+    const statusMsg = $(`<div class="countdown-feedback">Countdown Complete!</div>`)
     statusMsg.css({
       position: 'fixed',
       top: '20px',
@@ -555,60 +643,56 @@ class KeyboardControls {
     let finalLeft = 0
     let finalRight = 0
     
-    // 修正后的硬编码
+    // 硬编码的复合运动值
     if (forward && left) {
-      // WA - 前进左转：左轮慢，右轮快
+      // WA - 前进左转
       if (currentSpeed === 'slow') {
-        finalLeft = -2      // 比基础65慢
-        finalRight = 5     // 比基础8快很多
+        finalLeft = -2
+        finalRight = 5
       } else if (currentSpeed === 'moderate') {
-        finalLeft = 40      // 比基础87慢
-        finalRight = 110    // 比基础75快
+        finalLeft = 40
+        finalRight = 110
       } else { // fast
         finalLeft = 200
         finalRight = 330
       }
     } else if (forward && right) {
-      // WD - 前进右转：左轮快，右轮慢（甚至反转）
+      // WD - 前进右转
       if (currentSpeed === 'slow') {
-        finalLeft = 5     // 比基础65快
-        finalRight = -2    // 反转
+        finalLeft = 5
+        finalRight = -2
       } else if (currentSpeed === 'moderate') {
-        finalLeft = 110     // 比基础87快
-        finalRight = 40     // 比基础75慢
+        finalLeft = 110
+        finalRight = 40
       } else { // fast
         finalLeft = 330
         finalRight = 200
       }
     } else if (backward && left) {
-      // SA - 后退左转：左轮慢（绝对值小），右轮快（绝对值大）
+      // SA - 后退左转
       if (currentSpeed === 'slow') {
-        finalLeft = -5     // 比基础-70慢（绝对值小）
-        finalRight = 0    // 比基础-8快很多（绝对值大）
+        finalLeft = -5
+        finalRight = 0
       } else if (currentSpeed === 'moderate') {
-        finalLeft = -100     // 比基础-80慢
-        finalRight = -50    // 比基础-65快
+        finalLeft = -100
+        finalRight = -50
       } else { // fast
         finalLeft = -200
         finalRight = -330
       }
     } else if (backward && right) {
-      // SD - 后退右转：左轮快（绝对值大），右轮慢（绝对值小）
+      // SD - 后退右转
       if (currentSpeed === 'slow') {
-        finalLeft = 0     // 比基础-70快
-        finalRight = -5     // 反转
+        finalLeft = 0
+        finalRight = -5
       } else if (currentSpeed === 'moderate') {
-        finalLeft = -50    // 比基础-80快
-        finalRight = -100    // 比基础-65慢
+        finalLeft = -50
+        finalRight = -100
       } else { // fast
         finalLeft = -330
         finalRight = -200
       }
     }
-
-    // 确保值是整数
-    finalLeft = Math.round(finalLeft)
-    finalRight = Math.round(finalRight)
 
     // 限制速度范围
     const maxSpeed = this.getMaxSpeedForCurrentLevel()
@@ -622,6 +706,7 @@ class KeyboardControls {
     
     this.safeUpdateMotorDisplay(`Composite: L${clampedLeft} R${clampedRight}`)
   }
+  
   /**
    * 🔄 处理单一运动（保持原有逻辑完全不变）
    */
@@ -650,38 +735,6 @@ class KeyboardControls {
     }
   }
   
-  /**
-   * 🆕 获取服务器端速度值（新功能，用于复合运动）
-   */
-  getServerSpeedValues(action) {
-    const currentSpeed = this.getCurrentSpeed()
-    
-    // 匹配 robot_button.py 中的 HARD_CODED_SPEEDS
-    const SERVER_SPEEDS = {
-      "slow": {
-        "forward": {left: 65, right: 8},      // 修正值
-        "backward": {left: -70, right: -8},   // 修正值
-        "rotate_left": {left: -50, right: 50},
-        "rotate_right": {left: 50, right: -50}
-      },
-      "moderate": {
-        "forward": {left: 87, right: 75},     // 修正值
-        "backward": {left: -80, right: -65},  // 修正值
-        "rotate_left": {left: -90, right: 90}, // 修正值
-        "rotate_right": {left: 90, right: -90} // 修正值
-      },
-      "fast": {
-        "forward": {left: 230, right: 233},
-        "backward": {left: -238, right: -230},
-        "rotate_left": {left: -100, right: 100},
-        "rotate_right": {left: 100, right: -100}
-      }
-    }
-
-    return SERVER_SPEEDS[currentSpeed] && SERVER_SPEEDS[currentSpeed][action] 
-          ? SERVER_SPEEDS[currentSpeed][action] 
-          : {left: 0, right: 0}
-  }
   /**
    * 🆕 获取当前速度级别的最大值（新功能）
    */
@@ -762,144 +815,57 @@ class KeyboardControls {
     this.keys_pressed.a = false
     this.keys_pressed.s = false
     this.keys_pressed.d = false
-    
-    // Stop movement
-    if (this.stopMovement) {
-      this.stopMovement()
-    }
-  }
-  
-  /**
-   * 🆕 获取当前运动状态（新的调试功能）
-   */
-  getMovementStatus() {
-    const forward = this.keys_pressed.w
-    const backward = this.keys_pressed.s
-    const left = this.keys_pressed.a
-    const right = this.keys_pressed.d
-    
-    return {
-      keys: { forward, backward, left, right },
-      speed: this.getCurrentSpeed(),
-      paused: this.isSystemPaused ? this.isSystemPaused() : 'unknown',
-      initialized: this.initialized
-    }
-  }
-  
-  /**
-   * 🆕 显示帮助信息（新功能）
-   */
-  showHelp() {
-    const help = `
-🎮 Keyboard Controls Help:
-
-Basic Movement:
-  W - Forward        S - Backward  
-  A - Left turn      D - Right turn
-
-🆕 Composite Movement (NEW):
-  W + A - Forward while turning left
-  W + D - Forward while turning right
-  S + A - Backward while turning left
-  S + D - Backward while turning right
-
-Speed Control:
-  [ - Slow speed     ] - Moderate speed     \\ - Fast speed
-
-System Control:
-  SPACEBAR - Pause/Resume toggle
-
-Servo Presets (0-9):
-  1-8 - Various preset positions
-  9 - Try To Pick    0 - Default Hold
-
-Single Servo Controls:
-  I/J/N - Lift (High/Mid/Low)
-  U/H/B - Tilt (High/Mid/Low)
-  - - Close gripper  = - Open gripper
-
-All original functionality is preserved!
-    `
-    
-    console.log(help)
-    return help
-  }
-  
-  /**
-   * 🆕 测试复合运动（调试功能）
-   */
-  testCompositeMovement() {
-    if (!this.initialized) {
-      console.error('KeyboardControls not initialized')
-      return
-    }
-    
-    console.log('🧪 Testing composite movement patterns:')
-    
-    const testCases = [
-      {name: 'W (Forward only)', keys: {w: true, s: false, a: false, d: false}},
-      {name: 'W+A (Forward+Left)', keys: {w: true, s: false, a: true, d: false}},
-      {name: 'W+D (Forward+Right)', keys: {w: true, s: false, a: false, d: true}},
-      {name: 'S+A (Backward+Left)', keys: {w: false, s: true, a: true, d: false}},
-      {name: 'S+D (Backward+Right)', keys: {w: false, s: true, a: false, d: true}},
-      {name: 'A (Left only)', keys: {w: false, s: false, a: true, d: false}},
-      {name: 'D (Right only)', keys: {w: false, s: false, a: false, d: true}}
-    ]
-    
-    const originalKeys = {...this.keys_pressed}
-    
-    testCases.forEach((testCase, index) => {
-      setTimeout(() => {
-        console.log(`\n${index + 1}. ${testCase.name}:`)
-        
-        // 临时设置按键状态
-        this.keys_pressed = {...this.keys_pressed, ...testCase.keys}
-        
-        // 计算运动（但不实际发送命令）
-        const status = this.getMovementStatus()
-        console.log(`   Keys: ${JSON.stringify(status.keys)}`)
-        
-        // 如果是复合运动，显示计算结果
-        const hasForwardBackward = testCase.keys.w || testCase.keys.s
-        const hasLeftRight = testCase.keys.a || testCase.keys.d
-        
-        if (hasForwardBackward && hasLeftRight) {
-          console.log('   → Composite movement detected')
-        } else {
-          console.log('   → Single movement (original logic)')
-        }
-        
-        // 恢复原始状态
-        this.keys_pressed = originalKeys
-        
-        if (index === testCases.length - 1) {
-          console.log('\n✅ Test completed. All original functionality preserved.')
-        }
-      }, index * 500)
-    })
-  }
-  
-  /**
-   * Cleanup (保持不变，增强安全性)
-   */
-  destroy() {
-    // Remove event listeners safely
-    if (typeof $ !== 'undefined') {
-      $(document).off("keydown keyup")
-    } else {
-      document.removeEventListener("keydown", this.handleKeyDown)
-      document.removeEventListener("keyup", this.handleKeyUp)
-    }
-    
-    // Clear timers
-    if (this.servo_timer) {
-      clearTimeout(this.servo_timer)
-      this.servo_timer = null
-    }
-    
-    this.initialized = false
-    console.log('KeyboardControls: Destroyed safely')
-  }
+   
+   // Stop movement
+   if (this.stopMovement) {
+     this.stopMovement()
+   }
+ }
+ 
+ /**
+  * 🆕 获取当前运动状态
+  */
+ getMovementStatus() {
+   const forward = this.keys_pressed.w
+   const backward = this.keys_pressed.s
+   const left = this.keys_pressed.a
+   const right = this.keys_pressed.d
+   
+   return {
+     keys: { forward, backward, left, right },
+     speed: this.getCurrentSpeed(),
+     paused: this.isSystemPaused ? this.isSystemPaused() : 'unknown',
+     initialized: this.initialized
+   }
+ }
+ 
+ /**
+  * Cleanup
+  */
+ destroy() {
+   // Remove event listeners safely
+   if (typeof $ !== 'undefined') {
+     $(document).off("keydown keyup")
+   } else {
+     document.removeEventListener("keydown", this.handleKeyDown)
+     document.removeEventListener("keyup", this.handleKeyUp)
+   }
+   
+   // Clear timers
+   if (this.servo_timer) {
+     clearTimeout(this.servo_timer)
+     this.servo_timer = null
+   }
+   
+   // Clear countdown timer
+   if (this.countdownInterval) {
+     clearInterval(this.countdownInterval)
+     this.countdownInterval = null
+   }
+   
+   this.initialized = false
+   console.log('KeyboardControls: Destroyed safely')
+ }
 }
 
 // Export for use in other modules (保持不变)
@@ -907,19 +873,16 @@ window.KeyboardControls = KeyboardControls
 
 // 🆕 增强的自动加载提示
 if (typeof $ !== 'undefined') {
-  $(document).ready(function() {
-    setTimeout(() => {
-      console.log('🎮 Enhanced KeyboardControls loaded!')
-      console.log('💡 New: Composite movement support (W+A, W+D, S+A, S+D)')
-      console.log('✅ All original functionality preserved')
-      console.log('📚 Type keyboardControls.showHelp() for help')
-      console.log('🧪 Type keyboardControls.testCompositeMovement() to test')
-    }, 1000)
-  })
+ $(document).ready(function() {
+   setTimeout(() => {
+     console.log('🎮 Enhanced KeyboardControls loaded!')
+     console.log('💡 New features: Composite movement (W+A, W+D, S+A, S+D), T=11s countdown')
+   }, 1000)
+ })
 } else {
-  // Fallback for environments without jQuery
-  setTimeout(() => {
-    console.log('🎮 Enhanced KeyboardControls loaded (no jQuery detected)')
-    console.log('⚠️ Some visual feedback features may be limited')
-  }, 1000)
+ // Fallback for environments without jQuery
+ setTimeout(() => {
+   console.log('🎮 Enhanced KeyboardControls loaded (no jQuery detected)')
+   console.log('⚠️ Some visual feedback features may be limited')
+ }, 1000)
 }

@@ -36,6 +36,142 @@
   </div>
 </div>
 
+<!-- Bottom Controls: LEDs & Play + Readings -->
+<div class="bottom-controls">
+  
+  <!-- LED and Play Controls (Left) -->
+  <div class="led-play-section">
+    <div class="led-controls">
+      <strong>LEDs:</strong>
+      <input type="checkbox" id="led0" onchange="setLeds()">
+      <input type="checkbox" id="led1" onchange="setLeds()">
+      <input type="checkbox" id="led2" onchange="setLeds()">
+    </div>
+    
+    <div class="play-controls">
+      <input type="text" id="notes" maxlength="14" value="l16ceg>c">
+      <button onclick="playNotes()">Play</button>
+    </div>
+  </div>
+  
+  <!-- Compact Readings (Right) -->
+  <div class="readings-section">
+    
+    <div class="readings-row">
+      <div class="reading-item">
+        <strong>Buttons:</strong>
+        <div class="reading-values">
+          <span id="button0">0</span>
+          <span id="button1">0</span>
+          <span id="button2">0</span>
+        </div>
+      </div>
+      
+      <div class="reading-item">
+        <strong>Battery:</strong>
+        <span id="battery_millivolts">----</span>mV
+      </div>
+    </div>
+    
+    <div class="readings-row">
+      <div class="reading-item">
+        <strong>Analog:</strong>
+        <div class="reading-values">
+          <span id="analog0">0</span>
+          <span id="analog1">0</span>
+          <span id="analog2">0</span>
+          <span id="analog3">0</span>
+          <span id="analog4">0</span>
+          <span id="analog5">0</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="readings-row">
+      <div class="reading-item">
+        <strong>Encoders:</strong>
+        <div class="reading-values">
+          <span id="encoders0">0</span>
+          <span id="encoders1">0</span>
+        </div>
+      </div>
+      
+      <div class="reading-item">
+        <strong>Servo:</strong>
+        P:<span id="servo-position">-</span> E:<span id="servo-enabled">-</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ReSpeaker Status Panel (NEW - Between movement controls and bottom info) -->
+<div class="control-section">
+  <div class="respeaker-status-panel">
+    <div class="status-grid">
+      <div class="status-item">
+        <span class="status-label">Hardware:</span>
+        <span id="respeaker-init" class="status-value">Checking...</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Streaming:</span>
+        <span id="streaming-status" class="status-value">To 172.20.10.4</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">User:</span>
+        <span id="current-user" class="status-value">default</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Gamepad:</span>
+        <span id="gamepad-status" class="status-value">Not Connected</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">DOA:</span>
+        <span id="current-doa" class="status-value">--</span>°
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Movement Controls -->
+<div class="control-section">
+  <div class="movement-control-area">
+    <!-- Left Side:  Direction Controls -->
+    <div class="left-controls">
+      <!-- Direction Controls -->
+      <div class="speed-controls">
+        <button id="slow-btn" class="speed-btn">Slow</button>
+        <button id="moderate-btn" class="speed-btn">Moderate</button>
+        <button id="fast-btn" class="speed-btn speed-active">Fast</button>
+      </div>
+    </div>
+    
+    <!-- Right Side -->
+    <div class="joystick-area">
+      <div class="motor-display" id="motor-display">Motors: 0 0</div>
+      <div class="direction-controls">
+        <div class="direction-row">
+          <div></div>
+          <button id="forward-btn" class="movement-btn">↑</button>
+          <div></div>
+        </div>
+        <div class="direction-row">
+          <button id="left-btn" class="movement-btn">←</button>
+          <div></div>
+          <button id="right-btn" class="movement-btn">→</button>
+        </div>
+        <div class="direction-row">
+          <div></div>
+          <button id="backward-btn" class="movement-btn">↓</button>
+          <div></div>
+        </div>
+      </div>
+      
+    </div>
+    
+  </div>
+</div>
+
 <!-- Arm Controls -->
 <div class="control-section">
   
@@ -133,160 +269,6 @@
   </div>
 </div>
 
-<!-- Movement Controls -->
-<div class="control-section">
-  <div class="movement-control-area">
-    
-    <!-- Left Side: Speed + Direction Controls -->
-    <div class="left-controls">
-      <!-- Speed Controls -->
-      <div class="speed-controls">
-        <button id="slow-btn" class="speed-btn">Slow</button>
-        <button id="moderate-btn" class="speed-btn">Moderate</button>
-        <button id="fast-btn" class="speed-btn speed-active">Fast</button>
-      </div>
-      
-      <!-- Direction Controls -->
-      <div class="direction-controls">
-        <div class="direction-row">
-          <div></div>
-          <button id="forward-btn" class="movement-btn">↑</button>
-          <div></div>
-        </div>
-        <div class="direction-row">
-          <button id="left-btn" class="movement-btn">←</button>
-          <div></div>
-          <button id="right-btn" class="movement-btn">→</button>
-        </div>
-        <div class="direction-row">
-          <div></div>
-          <button id="backward-btn" class="movement-btn">↓</button>
-          <div></div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Right Side: Joystick -->
-    <div class="joystick-area">
-      <div class="motor-display" id="motor-display">Motors: 0 0</div>
-      <div id="joystick">
-        <!-- Reference lines and circle -->
-        <div class="joystick-guides">
-          <div class="guide-line horizontal"></div>
-          <div class="guide-line vertical"></div>
-          <div class="guide-circle"></div>
-        </div>
-      </div>
-    </div>
-    
-  </div>
-</div>
-
-<!-- ReSpeaker Status Panel (NEW - Between movement controls and bottom info) -->
-<div class="control-section">
-  <div class="respeaker-status-panel">
-    <div class="status-grid">
-      <div class="status-item">
-        <span class="status-label">Hardware:</span>
-        <span id="respeaker-init" class="status-value">Checking...</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Streaming:</span>
-        <span id="streaming-status" class="status-value">To 172.20.10.4</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">User:</span>
-        <span id="current-user" class="status-value">default</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Gamepad:</span>
-        <span id="gamepad-status" class="status-value">Not Connected</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">DOA:</span>
-        <span id="current-doa" class="status-value">--</span>°
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- <div>
-  <img id="videoStream" src="http://172.20.10.10:8888" style="max-width: 100%; height: auto;">
-</div> -->
-
-<img src="http://172.20.10.10:8888/?action=stream" style="max-width: 100%; height: auto;">
-
-
-
-<!-- Bottom Controls: LEDs & Play + Readings -->
-<div class="bottom-controls">
-  
-  <!-- LED and Play Controls (Left) -->
-  <div class="led-play-section">
-    <div class="led-controls">
-      <strong>LEDs:</strong>
-      <input type="checkbox" id="led0" onchange="setLeds()">
-      <input type="checkbox" id="led1" onchange="setLeds()">
-      <input type="checkbox" id="led2" onchange="setLeds()">
-    </div>
-    
-    <div class="play-controls">
-      <input type="text" id="notes" maxlength="14" value="l16ceg>c">
-      <button onclick="playNotes()">Play</button>
-    </div>
-  </div>
-  
-  <!-- Compact Readings (Right) -->
-  <div class="readings-section">
-    
-    <div class="readings-row">
-      <div class="reading-item">
-        <strong>Buttons:</strong>
-        <div class="reading-values">
-          <span id="button0">0</span>
-          <span id="button1">0</span>
-          <span id="button2">0</span>
-        </div>
-      </div>
-      
-      <div class="reading-item">
-        <strong>Battery:</strong>
-        <span id="battery_millivolts">----</span>mV
-      </div>
-    </div>
-    
-    <div class="readings-row">
-      <div class="reading-item">
-        <strong>Analog:</strong>
-        <div class="reading-values">
-          <span id="analog0">0</span>
-          <span id="analog1">0</span>
-          <span id="analog2">0</span>
-          <span id="analog3">0</span>
-          <span id="analog4">0</span>
-          <span id="analog5">0</span>
-        </div>
-      </div>
-    </div>
-    
-    <div class="readings-row">
-      <div class="reading-item">
-        <strong>Encoders:</strong>
-        <div class="reading-values">
-          <span id="encoders0">0</span>
-          <span id="encoders1">0</span>
-        </div>
-      </div>
-      
-      <div class="reading-item">
-        <strong>Servo:</strong>
-        P:<span id="servo-position">-</span> E:<span id="servo-enabled">-</span>
-      </div>
-    </div>
-    
-  </div>
-  
-</div>
 
 </div>
 
