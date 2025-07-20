@@ -24,7 +24,7 @@ import json
 led0_state = False
 led1_state = False
 led2_state = False
-current_speed = "fast"  # Default speed level
+current_speed = "moderate"  # Default speed level
 paused = False  # Global pause state
 
 ##########################
@@ -94,18 +94,9 @@ def motors(left, right):
     # If paused, force motors to stop
     if paused:
         left, right = 0, 0
-        
-    # Apply speed factor to motor commands from joystick
-    if current_speed == "slow":
-        factor = robot_control.SPEED_SLOW
-    elif current_speed == "moderate":
-        factor = robot_control.SPEED_MODERATE
-    else:
-        factor = robot_control.SPEED_FAST
-        
-    left_adjusted = int(int(left) * factor)
-    right_adjusted = int(int(right) * factor)
-    robot_control.motors(left_adjusted, right_adjusted)
+    
+    # 直接使用传入的值，不应用任何速度因子
+    robot_control.motors(int(left), int(right))
     return ""
 
 @app.route("/set_speed/<level>")

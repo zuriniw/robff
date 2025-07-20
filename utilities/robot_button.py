@@ -13,11 +13,11 @@ class RobotButtonControl:
     # 每档速度下的固定PWM值（用于按钮控制行为）
     HARD_CODED_SPEEDS = {
         "slow": {
-            "forward": (75, 10), "backward": (-70, -10),
+            "forward": (57, 8), "backward": (-64, -8),
             "rotate_left": (-50, 50), "rotate_right": (50, -50)
         },
         "moderate": {
-            "forward": (92, 75), "backward": (-92, -65),
+            "forward": (80, 75), "backward": (-70, -65),
             "rotate_left": (-90, 90), "rotate_right": (90, -90)
         },
         "fast": {
@@ -25,10 +25,6 @@ class RobotButtonControl:
             "rotate_left": (-100, 100), "rotate_right": (100, -100)
         }
     }
-
-    # 右轮速度修正因子（默认不修正）
-    RIGHT_WHEEL_CORRECTION = 1
-
     def __init__(self, a_star):
         self.a_star = a_star
         self.is_moving = False
@@ -40,15 +36,13 @@ class RobotButtonControl:
         return self.speed_level
 
     def motors(self, left, right):
-        right_corrected = int(right * self.RIGHT_WHEEL_CORRECTION)
-
         MIN_MOTOR_THRESHOLD = 60
         if left != 0 and abs(left) < MIN_MOTOR_THRESHOLD:
             left = MIN_MOTOR_THRESHOLD if left > 0 else -MIN_MOTOR_THRESHOLD
-        if right_corrected != 0 and abs(right_corrected) < MIN_MOTOR_THRESHOLD:
-            right_corrected = MIN_MOTOR_THRESHOLD if right_corrected > 0 else -MIN_MOTOR_THRESHOLD
+        if right != 0 and abs(right) < MIN_MOTOR_THRESHOLD:
+            right = MIN_MOTOR_THRESHOLD if right > 0 else -MIN_MOTOR_THRESHOLD
 
-        self.a_star.motors(left, right_corrected)
+        self.a_star.motors(left, right)
 
     def move_forward(self):
         left, right = self.HARD_CODED_SPEEDS[self.speed_level]["forward"]

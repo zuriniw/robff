@@ -3,9 +3,9 @@
 html, body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  /* overflow: hidden; */
   height: 100%;
-  overscroll-behavior: none;
+  /* overscroll-behavior: none; */
 }
 html {
   font-family: sans-serif;
@@ -19,8 +19,8 @@ html {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
-  overflow-y: hidden;
+  /* overflow-x: hidden;
+  overflow-y: hidden; */
 }
 
 body {
@@ -32,8 +32,8 @@ body {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  overflow-x: hidden;
-  overflow-y: hidden;
+  /* overflow-x: hidden;
+  overflow-y: hidden; */
   position: relative;
 }
 

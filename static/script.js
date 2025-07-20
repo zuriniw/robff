@@ -8,7 +8,7 @@
 stop_motors = true
 block_set_motors = false
 mouse_dragging = false
-current_speed = "fast"  // Default speed level
+current_speed = "moderate"  // Default speed level
 
 // Recording state
 let is_recording = false
@@ -268,38 +268,101 @@ function initKeyboardControls() {
   // 创建键盘控制实例
   keyboardControls = new KeyboardControls()
   
-  // 初始化键盘控制，传入所需的依赖函数（包括速度设置函数）
+  // 初始化键盘控制，传入所需的依赖函数
   const success = keyboardControls.init({
     setMotors: setMotors,
     isSystemPaused: () => is_paused,
     stopMovement: () => $.ajax({url: "stop_movement"}),
     setServoPWM: setServoPWM,
     updateSliderValue: updateSliderValue,
-    setSpeed: setSpeed  // NEW: 传入速度设置函数
+    setSpeed: setSpeed,
+    togglePause: togglePause
   })
   
   if (!success) {
     console.error('Failed to initialize keyboard controls')
     keyboardControls = null
-  } else {
-    // 设置自定义参数（可选）
-    keyboardControls.setParameters({
-      servoStep: 50,              // 每次按键的PWM步进值
-      servoUpdateInterval: 50     // 伺服更新间隔（毫秒）
-    })
-    
-    // 同步当前速度设置
-    keyboardControls.syncSpeedLevel(current_speed)
-    
-    console.log('Keyboard controls initialized with servo and speed control:')
-    console.log('  WASD: Movement control')
-    console.log('  [/]: Speed down/up')
-    console.log('  Q/E: Lift up/down')
-    console.log('  Z/C: Gripper close/open')
-    console.log('  0-9: Servo presets')
+    return
   }
+  
+  // 设置复合运动的自定义参数
+  keyboardControls.setParameters({
+    baseStrength: 200,           // 基础运动强度
+    rotationFactor: 0.5,         // 旋转分量因子（相对于基础运动）
+    servoStep: 50,               // 伺服步进值
+    servoUpdateInterval: 50      // 伺服更新间隔
+  })
+  
+  // 同步当前速度设置
+  keyboardControls.syncSpeedLevel(current_speed)
+  
+  // 启用调试模式（可选，生产环境可以注释掉）
+  if (typeof keyboardControls.enableDebugMode === 'function') {
+    keyboardControls.enableDebugMode()
+  }
+  
+  // 添加运动显示更新函数
+  window.updateMotorDisplay = function(text) {
+    $("#motor-display").text(text)
+  }
+  
+  console.log('Enhanced keyboard controls initialized with composite movement support:')
+  console.log('  WASD: Movement control (supports combinations)')
+  console.log('  W+A: Forward-Left, W+D: Forward-Right')
+  console.log('  S+A: Backward-Left, S+D: Backward-Right')
+  console.log('  []: Speed switching')
+  console.log('  SPACEBAR: Pause/Resume toggle')
+  console.log('  I/J/N: Lift control, U/H/B: Tilt control')
+  console.log('  -/=: Gripper control, 0-9: Servo presets')
+  console.log('  Ctrl+F12: Test movement patterns (debug)')
+  console.log('  Ctrl+F11: Show active keys (debug)')
+  
+  // 添加复合运动的视觉反馈
+  addCompositeMovementFeedback()
 }
 
+/**
+ * 添加复合运动的视觉反馈
+ */
+function addCompositeMovementFeedback() {
+  // 在页面上添加运动状态显示（如果还没有的话）
+  if ($("#movement-indicator").length === 0) {
+    const indicator = $(`
+      <div id="movement-indicator" style="
+        position: fixed;
+        top: 140px;
+        right: 20px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+        z-index: 1000;
+        display: none;
+      ">
+        Movement: None
+      </div>
+    `)
+    $('body').append(indicator)
+  }
+  
+  // 重写 updateMotorDisplay 以显示复合运动
+  window.updateMotorDisplay = function(text) {
+    $("#motor-display").text(text)
+    
+    // 显示详细的运动状态
+    if (text.includes("L") && text.includes("R")) {
+      $("#movement-indicator").text(text).show()
+      
+      // 3秒后隐藏
+      clearTimeout(window.movementIndicatorTimeout)
+      window.movementIndicatorTimeout = setTimeout(() => {
+        $("#movement-indicator").fadeOut()
+      }, 3000)
+    }
+  }
+}
 
 // ============================================================================
 // GAMEPAD CONTROL INITIALIZATION

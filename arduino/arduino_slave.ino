@@ -19,7 +19,7 @@ Servo gripperServo; // Pin 11, max-2330-close, min-500-open, mid-1440-semiopen
 
 // Servo limits (from testing)
 const int LIFT_MIN = 960, LIFT_MAX = 1630, LIFT_MID = 1550;
-const int TILT_MIN = 1515, TILT_MAX = 1900, TILT_MID = 1700;
+const int TILT_MIN = 1200, TILT_MAX = 1900, TILT_MID = 1700;
 const int GRIPPER_MIN = 500, GRIPPER_MAX = 2400, GRIPPER_MID = 1440;
 
 // Preset positions
