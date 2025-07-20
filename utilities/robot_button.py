@@ -5,19 +5,16 @@ import threading
 import math
 
 class RobotButtonControl:
-    # 原有浮点乘数速度常量（用于乘法控制）
-    SPEED_SLOW = 0.3
-    SPEED_MODERATE = 0.5
-    SPEED_FAST = 0.9
-
-    # 每档速度下的固定PWM值（用于按钮控制行为）
+    # SPEED_SLOW = 0.3
+    # SPEED_MODERATE = 0.5
+    # SPEED_FAST = 0.9
     HARD_CODED_SPEEDS = {
         "slow": {
             "forward": (57, 8), "backward": (-64, -8),
             "rotate_left": (-50, 50), "rotate_right": (50, -50)
         },
         "moderate": {
-            "forward": (80, 75), "backward": (-70, -65),
+            "forward": (78, 75), "backward": (-67, -65),
             "rotate_left": (-90, 90), "rotate_right": (90, -90)
         },
         "fast": {

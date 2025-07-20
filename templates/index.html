@@ -20,7 +20,11 @@
 <!-- Top Controls: Record Left, Pause Center, Shutdown Right -->
 <div class="top-controls">
   <button id="record-btn" class="top-btn left">Start Recording</button>
-  <button id="pause-btn" class="top-btn center">PAUSE</button>
+  <button id="pause-btn" class="top-btn center" onclick="togglePause(); return false;">
+  PAUSE
+</button>
+
+
   <a href="/halt" onClick="return shutdown()" class="top-btn right">Shutdown</a>
 </div>
 
