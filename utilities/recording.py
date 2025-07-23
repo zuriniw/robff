@@ -680,10 +680,11 @@ class RecordingControl_v3:
     """Enhanced recording control that integrates with Flask web interface"""
     
     def __init__(self, ssh_host="172.20.10.4"):
-        self.recording_dir = "/home/robff/robff/recordings"
+        self.base_recording_dir = "/home/robff/robff/recordings"
         self.is_recording = False
         self.ssh_host = ssh_host  # Permanently set to laptop IP
         self.user_id = "default"  # Default user ID
+        self.current_session_dir = None  # Will store the current session directory
         
         # ReSpeaker controller
         self.respeaker = ReSpeakerController()
@@ -691,8 +692,8 @@ class RecordingControl_v3:
         # Video streamer
         self.video_streamer = VideoStreamer()
         
-        # Create recording directory if it doesn't exist
-        os.makedirs(self.recording_dir, exist_ok=True)
+        # Create base recording directory if it doesn't exist
+        os.makedirs(self.base_recording_dir, exist_ok=True)
         
         # Initialize ReSpeaker
         if RESPEAKER_AVAILABLE:
@@ -722,22 +723,40 @@ class RecordingControl_v3:
             return True
         return False
     
+    def _create_session_directory(self, timestamp):
+        """Create a unique directory for this recording session"""
+        # Format: /home/robff/robff/recordings/username_20250722_143052/
+        session_dir_name = f"{self.user_id}_{timestamp}"
+        session_dir_path = os.path.join(self.base_recording_dir, session_dir_name)
+        
+        # Create the directory
+        os.makedirs(session_dir_path, exist_ok=True)
+        
+        print(f"Created session directory: {session_dir_path}")
+        return session_dir_path
+    
     def start_recording(self):
         if self.is_recording:
             return False
             
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename_prefix = f"{self.user_id}_{timestamp}"
+        
+        # Create session directory
+        self.current_session_dir = self._create_session_directory(timestamp)
+        
+        # Filename prefix will just be the user_id since files are already in user directory
+        filename_prefix = self.user_id
         
         try:
             print(f"Starting recording session: {timestamp}")
+            print(f"Session directory: {self.current_session_dir}")
             
             # Start ReSpeaker capture
             if RESPEAKER_AVAILABLE and self.respeaker.device_index:
-                self.respeaker.start_capture(self.recording_dir, filename_prefix)
+                self.respeaker.start_capture(self.current_session_dir, filename_prefix)
             
             # Start video recording
-            self.video_streamer.start_recording(self.recording_dir, filename_prefix)
+            self.video_streamer.start_recording(self.current_session_dir, filename_prefix)
             
             # Start video streaming if SSH host is configured
             if self.ssh_host:
@@ -746,11 +765,11 @@ class RecordingControl_v3:
             self.is_recording = True
             self.start_time = time.time()
             
-            print(f"Recording session started:")
+            print(f"Recording session started in: {self.current_session_dir}")
             if RESPEAKER_AVAILABLE and self.respeaker.device_index:
-                print(f"  ReSpeaker raw: {self.respeaker.raw_audio_file}")
-                print(f"  DOA log: {self.respeaker.doa_log_file}")
-            print(f"  Video: {len(self.video_streamer.cameras)} camera(s) recording")
+                print(f"  ReSpeaker raw: {filename_prefix}_respeaker_raw.wav")
+                print(f"  DOA log: {filename_prefix}_doa_log.json")
+            print(f"  Video: {filename_prefix}_camera1.mp4, {filename_prefix}_camera2.mp4")
             if self.ssh_host:
                 print(f"  Audio streaming to: {self.ssh_host}:9999")
                 print(f"  Video streaming to: {self.ssh_host}:8888-8889")
@@ -782,6 +801,15 @@ class RecordingControl_v3:
             duration = time.time() - self.start_time
             print(f"Recording session stopped. Duration: {duration:.2f} seconds")
             
+            # List all files created in the session directory
+            if self.current_session_dir and os.path.exists(self.current_session_dir):
+                files = os.listdir(self.current_session_dir)
+                print(f"Files created in {self.current_session_dir}:")
+                for file in sorted(files):
+                    file_path = os.path.join(self.current_session_dir, file)
+                    size_mb = os.path.getsize(file_path) / 1024 / 1024
+                    print(f"  {file} ({size_mb:.2f} MB)")
+            
             return True
                 
         except Exception as e:
@@ -798,7 +826,8 @@ class RecordingControl_v3:
             'video_streaming': self.video_streamer.is_streaming,
             'cameras_active': len(self.video_streamer.camera_devices),
             'laptop_ip': self.ssh_host,
-            'user_id': self.user_id
+            'user_id': self.user_id,
+            'session_directory': self.current_session_dir
         }
         
         if self.is_recording:
@@ -809,6 +838,42 @@ class RecordingControl_v3:
                 status['current_doa'] = self.respeaker.get_current_doa()
         
         return status
+    
+    def list_user_sessions(self, user_id=None):
+        """List all recording sessions for a user"""
+        if user_id is None:
+            user_id = self.user_id
+        
+        sessions = []
+        if os.path.exists(self.base_recording_dir):
+            for item in os.listdir(self.base_recording_dir):
+                if item.startswith(f"{user_id}_") and os.path.isdir(os.path.join(self.base_recording_dir, item)):
+                    session_path = os.path.join(self.base_recording_dir, item)
+                    
+                    # Get session info
+                    session_info = {
+                        'directory': item,
+                        'path': session_path,
+                        'timestamp': item.split('_', 1)[1] if '_' in item else 'unknown',
+                        'files': []
+                    }
+                    
+                    # List files in session
+                    if os.path.exists(session_path):
+                        for file in os.listdir(session_path):
+                            file_path = os.path.join(session_path, file)
+                            if os.path.isfile(file_path):
+                                size_mb = os.path.getsize(file_path) / 1024 / 1024
+                                session_info['files'].append({
+                                    'name': file,
+                                    'size_mb': round(size_mb, 2)
+                                })
+                    
+                    sessions.append(session_info)
+        
+        # Sort by timestamp (newest first)
+        sessions.sort(key=lambda x: x['timestamp'], reverse=True)
+        return sessions
     
     def cleanup(self):
         """Cleanup all resources"""
@@ -821,5 +886,7 @@ class RecordingControl_v3:
         self.video_streamer.cleanup()
 
 
+# For backward compatibility with existing Flask interface
+RecordingControl_v2 = RecordingControl_v3
 # For backward compatibility with existing Flask interface
 RecordingControl_v2 = RecordingControl_v3

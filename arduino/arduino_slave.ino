@@ -297,7 +297,7 @@ void handleServoEnable() {
     targetGripperPulse = currentGripperPulse;
     
     servosAttached = true;
-    buzzer.play("!c32");
+    // buzzer.play("!c32");
     Serial.println("Servos enabled");
   }
   else if (!slave.buffer.servoEnable && servosAttached) {
@@ -306,7 +306,7 @@ void handleServoEnable() {
     tiltServo.detach();
     gripperServo.detach();
     servosAttached = false;
-    buzzer.play("!c16c16");
+    // buzzer.play("!c16c16");
     currentPosition = NONE;
     Serial.println("Servos disabled");
   }

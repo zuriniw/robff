@@ -8,13 +8,29 @@ class RobotButtonControl:
     # SPEED_SLOW = 0.3
     # SPEED_MODERATE = 0.5
     # SPEED_FAST = 0.9
+
+    # HARD_CODED_SPEEDS = {
+    #     "slow": {
+    #         "forward": (57, 8), "backward": (-64, -8),
+    #         "rotate_left": (-50, 50), "rotate_right": (50, -50)
+    #     },
+    #     "moderate": {
+    #         "forward": (78, 75), "backward": (-67, -65),
+    #         "rotate_left": (-90, 90), "rotate_right": (90, -90)
+    #     },
+    #     "fast": {
+    #         "forward": (230, 233), "backward": (-238, -230),
+    #         "rotate_left": (-100, 100), "rotate_right": (100, -100)
+    #     }
+    # }
+
     HARD_CODED_SPEEDS = {
         "slow": {
-            "forward": (57, 8), "backward": (-64, -8),
-            "rotate_left": (-50, 50), "rotate_right": (50, -50)
+            "forward": (82, 1), "backward": (-82, -1),
+            "rotate_left": (-30, 30), "rotate_right": (30, -30)
         },
         "moderate": {
-            "forward": (78, 75), "backward": (-67, -65),
+            "forward": (110, 85), "backward": (-110, -85),
             "rotate_left": (-90, 90), "rotate_right": (90, -90)
         },
         "fast": {
@@ -22,6 +38,7 @@ class RobotButtonControl:
             "rotate_left": (-100, 100), "rotate_right": (100, -100)
         }
     }
+
     def __init__(self, a_star):
         self.a_star = a_star
         self.is_moving = False

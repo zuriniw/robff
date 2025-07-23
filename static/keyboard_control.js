@@ -71,23 +71,23 @@ class KeyboardControls {
     
     // Preset actions configuration (完全保留原配置)
     this.presets = {
-      '1': { name: 'Ready To Push Box', type: 'simple', lift: 960, tilt: 1890, gripper: 500 },
-      '2': { name: 'Quick Press Key', type: 'sequence', sequence: [
+      '1': { name: 'Ready To Push Box', type: 'simple', lift: 1273, tilt: 1888, gripper: 1754 },
+      '2': { name: 'press mid', type: 'simple', lift: 1530, tilt: 1580, gripper: 1000 },
+      '3': { name: 'Quick Press Key', type: 'sequence', sequence: [
         { delay: 0, lift: 1150, tilt: 1510, gripper: 2330 },
         { delay: 500, lift: 1280, tilt: 1510, gripper: null },
         { delay: 1000, lift: 1150, tilt: 1510, gripper: null },
         { delay: 1500, lift: 1280, tilt: 1510, gripper: null },
         { delay: 2000, lift: 1150, tilt: 1510, gripper: null },
       ]},
-      '3': { name: 'Pickup Grasp', type: 'simple', lift: 1000, tilt: 1550, gripper: 2330 },
-      '4': { name: 'Lift Object', type: 'simple', lift: 1400, tilt: 1650, gripper: 2330 },
-      '5': { name: 'High Position', type: 'simple', lift: 1600, tilt: 1800, gripper: 2330 },
+      '4': { name: 'press light', type: 'simple', lift: 1330, tilt: 1580, gripper: 1000 },
+      '5': { name: 'badminton', type: 'simple', lift: 1630, tilt: 1890, gripper: 500 },
       '6': { name: 'Drop Position', type: 'simple', lift: 1200, tilt: 1600, gripper: 500 },
       '7': { name: 'Locate The Capture', type: 'simple', lift: 1200, tilt: 1600, gripper: 500 },
-      '8': { name: 'Ready To Capture', type: 'simple', lift: 1630, tilt: 1515, gripper: 500 },
+      '8': { name: 'press intense', type: 'simple', lift: 1630, tilt: 1515, gripper: 500 },
       '9': { name: 'Try To Pick', type: 'sequence', sequence: [
-        { delay: 0, lift: 1630, tilt: 1515, gripper: 2330 },
-        { delay: 500, lift: 1200, tilt: 1515, gripper: 2330 }
+        { delay: 300, lift: 1630, tilt: 1515, gripper: 2330 },
+        { delay: 700, lift: 1200, tilt: 1515, gripper: 2330 }
       ]},
       '0': { name: 'Default Just Hold', type: 'simple', lift: 1100, tilt: 1890, gripper: null },
       // Single servo presets (保留所有原有预设)
@@ -96,7 +96,7 @@ class KeyboardControls {
       'n': { name: 'Lift Lowest', type: 'simple', lift: 1630, tilt: null, gripper: null },
       'u': { name: 'Tilt Highest', type: 'simple', lift: null, tilt: 1890, gripper: null },
       'h': { name: 'Tilt Middle', type: 'simple', lift: null, tilt: 1580, gripper: null },
-      'b': { name: 'Tilt Lowest', type: 'simple', lift: null, tilt: 1210, gripper: null },
+      'b': { name: 'Tilt Lowest', type: 'simple', lift: null, tilt: 1310, gripper: null },
       'g': { name: 'Gesture', type: 'sequence', sequence: [
         { delay: 500, lift: 1150, tilt: 1890, gripper: 2330 },
         { delay: 1500, lift: 1250, tilt: 1510, gripper: 2330 },
