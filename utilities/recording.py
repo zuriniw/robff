@@ -124,6 +124,8 @@ class ReSpeakerController:
     
     def _doa_reading_loop(self):
         """Separate thread for reading DOA values"""
+        doa_log_counter = 0
+        
         while self.Mic_tuning:
             try:
                 # Read DOA value
@@ -133,18 +135,24 @@ class ReSpeakerController:
                 with self.doa_lock:
                     self.current_doa = doa_value
                 
+                # 每30次读取打印一次日志 (30 * 0.1s = 3秒)
+                doa_log_counter += 1
+                if doa_log_counter % 30 == 1:
+                    print(f"DOA: {doa_value}°")
+                
                 # Small delay to prevent overwhelming the USB device
                 time.sleep(0.1)  # 10Hz update rate
                 
             except Exception as e:
-                # Only print error occasionally to avoid spam
+                # 减少错误日志频率
                 if hasattr(self, '_doa_error_count'):
                     self._doa_error_count += 1
                 else:
                     self._doa_error_count = 1
                     
-                if self._doa_error_count % 100 == 1:
-                    print(f"DOA reading error (count: {self._doa_error_count}): {e}")
+                # 每300次错误打印一次 (约30秒)
+                if self._doa_error_count % 300 == 1:
+                    print(f"DOA error (#{self._doa_error_count}): {e}")
                 
                 time.sleep(0.1)
     
@@ -231,46 +239,98 @@ class ReSpeakerController:
             print(f"Error starting ReSpeaker capture: {e}")
             return False
     
+
+    def _doa_reading_loop(self):
+        """Separate thread for reading DOA values"""
+        doa_log_counter = 0
+        
+        while self.Mic_tuning:
+            try:
+                # Read DOA value
+                doa_value = self.Mic_tuning.direction
+                
+                # Update current DOA with thread lock
+                with self.doa_lock:
+                    self.current_doa = doa_value
+                
+                # 每30次读取打印一次日志 (30 * 0.1s = 3秒)
+                doa_log_counter += 1
+                if doa_log_counter % 30 == 1:
+                    print(f"DOA: {doa_value}°")
+                
+                # Small delay to prevent overwhelming the USB device
+                time.sleep(0.1)  # 10Hz update rate
+                
+            except Exception as e:
+                # 减少错误日志频率
+                if hasattr(self, '_doa_error_count'):
+                    self._doa_error_count += 1
+                else:
+                    self._doa_error_count = 1
+                    
+                # 每300次错误打印一次 (约30秒)
+                if self._doa_error_count % 300 == 1:
+                    print(f"DOA error (#{self._doa_error_count}): {e}")
+                
+                time.sleep(0.1)
+
     def _capture_loop(self):
         """Main capture loop for audio and DOA data"""
         frame_count = 0
-        
+        log_interval = 150 # 每150帧约15秒打印一次状态
+        doa_log_counter = 0  # 新增：DOA记录计数器
+        doa_record_interval = int(3.0 / (self.chunk_size / self.rate))  # 计算3秒对应的帧数
+
         while self.is_capturing:
             try:
                 # Read audio data
                 audio_data = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 timestamp = time.time()
-                
+
                 # Convert to numpy array for processing
                 audio_array = np.frombuffer(audio_data, dtype=np.int16)
                 audio_array = audio_array.reshape(-1, self.channels)
-                
+
                 # Store raw audio data
                 self.raw_audio_data.append(audio_data)
-                
+
                 # Get current DOA from separate thread
                 with self.doa_lock:
                     doa_angle = self.current_doa
-                
-                # Store DOA data
-                doa_entry = {
-                    'timestamp': timestamp,
-                    'frame': frame_count,
-                    'doa_angle': doa_angle,
-                    'audio_level': float(np.mean(np.abs(audio_array)))  # RMS level
-                }
-                self.doa_data.append(doa_entry)
-                
-                # Stream to SSH laptop if connected
+
+                # 只每3秒记录一次DOA数据到文件
+                doa_log_counter += 1
+                if doa_log_counter % doa_record_interval == 0:
+                    doa_entry = {
+                        'timestamp': timestamp,
+                        'frame': frame_count,
+                        'doa_angle': doa_angle,
+                        'audio_level': float(np.mean(np.abs(audio_array)))
+                    }
+                    self.doa_data.append(doa_entry)
+
+                # Stream to SSH laptop if connected (保持原来的频率)
                 if self.ssh_connected:
-                    self._stream_to_ssh(audio_array, doa_entry)
-                
+                    doa_entry_temp = {
+                        'timestamp': timestamp,
+                        'frame': frame_count,
+                        'doa_angle': doa_angle,
+                        'audio_level': float(np.mean(np.abs(audio_array)))
+                    }
+                    self._stream_to_ssh(audio_array, doa_entry_temp)
+
                 frame_count += 1
-                
+
+                # 每15秒打印一次捕获状态
+                if frame_count % log_interval == 0:
+                    print(f"Audio capture: {frame_count} frames, DOA: {doa_angle}°")
+
             except Exception as e:
-                print(f"Capture loop error: {e}")
-                time.sleep(0.001)  # Brief pause on error
-    
+                if frame_count % 300 == 0:
+                    print(f"Capture error: {e}")
+                time.sleep(0.001)
+
+
     def _stream_to_ssh(self, audio_array, doa_entry):
         """Stream audio and DOA data to SSH laptop"""
         try:
@@ -281,7 +341,7 @@ class ReSpeakerController:
                 'doa_angle': doa_entry['doa_angle'],
                 'audio_level': doa_entry['audio_level'],
                 'audio_shape': audio_array.shape,
-                'audio_data': audio_array.tobytes().hex()  # Convert to hex string for JSON
+                'audio_data': audio_array.tobytes().hex()
             }
             
             # Send as JSON
@@ -289,7 +349,14 @@ class ReSpeakerController:
             self.ssh_socket.sendall(json_data.encode('utf-8'))
             
         except Exception as e:
-            print(f"SSH streaming error: {e}")
+            # SSH错误日志：每600次打印一次 (约1分钟)
+            if not hasattr(self, '_ssh_error_count'):
+                self._ssh_error_count = 0
+            self._ssh_error_count += 1
+            
+            if self._ssh_error_count % 600 == 1:
+                print(f"SSH streaming error: {e}")
+            
             self.ssh_connected = False
     
     def get_current_doa(self):
@@ -682,9 +749,9 @@ class RecordingControl_v3:
     def __init__(self, ssh_host="172.20.10.4"):
         self.base_recording_dir = "/home/robff/robff/recordings"
         self.is_recording = False
-        self.ssh_host = ssh_host  # Permanently set to laptop IP
-        self.user_id = "default"  # Default user ID
-        self.current_session_dir = None  # Will store the current session directory
+        self.ssh_host = ssh_host
+        self.user_id = "ziruw" # user id
+        self.current_session_dir = None
         
         # ReSpeaker controller
         self.respeaker = ReSpeakerController()
@@ -717,16 +784,25 @@ class RecordingControl_v3:
     
     def set_user_id(self, user_id):
         """Set user ID for file naming"""
-        if user_id and user_id.strip():
-            # Sanitize user ID for filename usage
-            self.user_id = "".join(c for c in user_id.strip() if c.isalnum() or c in ('-', '_'))
-            return True
-        return False
+        if not user_id or not user_id.strip():
+            return False
+            
+        # Sanitize user ID for filename usage
+        clean_user_id = "".join(c for c in user_id.strip() if c.isalnum() or c in ('-', '_'))
+        
+        if not clean_user_id:
+            return False
+            
+        self.user_id = clean_user_id
+        return True
     
     def _create_session_directory(self, timestamp):
         """Create a unique directory for this recording session"""
+        # Ensure user_id is not empty
+        effective_user_id = self.user_id if self.user_id.strip() else "unknown_user"
+        
         # Format: /home/robff/robff/recordings/username_20250722_143052/
-        session_dir_name = f"{self.user_id}_{timestamp}"
+        session_dir_name = f"{effective_user_id}_{timestamp}"
         session_dir_path = os.path.join(self.base_recording_dir, session_dir_name)
         
         # Create the directory
@@ -744,8 +820,8 @@ class RecordingControl_v3:
         # Create session directory
         self.current_session_dir = self._create_session_directory(timestamp)
         
-        # Filename prefix will just be the user_id since files are already in user directory
-        filename_prefix = self.user_id
+        # Filename prefix
+        filename_prefix = self.user_id if self.user_id.strip() else "unknown_user"
         
         try:
             print(f"Starting recording session: {timestamp}")
@@ -886,7 +962,5 @@ class RecordingControl_v3:
         self.video_streamer.cleanup()
 
 
-# For backward compatibility with existing Flask interface
-RecordingControl_v2 = RecordingControl_v3
 # For backward compatibility with existing Flask interface
 RecordingControl_v2 = RecordingControl_v3

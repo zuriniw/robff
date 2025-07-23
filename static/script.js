@@ -43,13 +43,14 @@ function init() {
 // RESPEAKER AND STREAMING CONTROLS
 // ============================================================================
 
+let isSettingUserId = false
+
 function initReSpeakerControls() {
-  // Set user ID button handler
   $("#set-user-btn").on("click", function(e) {
     e.preventDefault()
     setUserID()
   })
-  // Enter key handler for user ID input
+  
   $("#user-id-input").on("keypress", function(e) {
     if (e.which === 13) { // Enter key
       setUserID()
@@ -65,14 +66,11 @@ function setUserID() {
     return
   }
   
-  // Validate user ID format (alphanumeric, dash, underscore only)
   const userIdRegex = /^[a-zA-Z0-9_-]+$/
   if (!userIdRegex.test(id)) {
     alert("User ID can only contain letters, numbers, dashes, and underscores")
     return
   }
-  
-  console.log("Setting user ID to:", id)
   
   $.ajax({
     url: "/set_user_id",
@@ -80,30 +78,18 @@ function setUserID() {
     contentType: "application/json",
     data: JSON.stringify({user_id: id}),
     success: function(response) {
-      console.log("Server response:", response)
       const result = JSON.parse(response)
       if (result.success) {
-        // Update local state immediately
-        user_id = id
-        $("#current-user").text(id)
-        
-        console.log("User ID successfully set to:", id)
-        alert("User ID successfully set to: " + id)
-        
-        // Force multiple status refreshes to ensure update
-        setTimeout(() => $.ajax({url: "status.json"}).done(update_status), 50)
-        setTimeout(() => $.ajax({url: "status.json"}).done(update_status), 200)
-        setTimeout(() => $.ajax({url: "status.json"}).done(update_status), 500)
-        
+        // 强制更新界面显示
+        $("#current-user").text(result.user_id)
+        user_id = result.user_id
+        console.log("User ID set to:", result.user_id)
       } else {
         alert("Failed to set User ID: " + result.message)
       }
     },
     error: function(xhr, status, error) {
-      console.log("AJAX Error:", error)
-      console.log("Status:", status)
-      console.log("Response:", xhr.responseText)
-      alert("Error setting User ID. Check console for details.")
+      alert("Error setting User ID: " + error)
     }
   })
 }
@@ -473,43 +459,42 @@ function poll() {
   }
 }
 
+
 function update_status(json) {
   s = JSON.parse(json)
+  
+  // 更新硬件状态
   $("#button0").html(s["buttons"][0] ? '1' : '0')
   $("#button1").html(s["buttons"][1] ? '1' : '0')
   $("#button2").html(s["buttons"][2] ? '1' : '0')
-
   $("#battery_millivolts").html(s["battery_millivolts"])
-
   $("#analog0").html(s["analog"][0])
   $("#analog1").html(s["analog"][1])
   $("#analog2").html(s["analog"][2])
   $("#analog3").html(s["analog"][3])
   $("#analog4").html(s["analog"][4])
   $("#analog5").html(s["analog"][5])
-  
   $("#encoders0").html(s["encoders"][0])
   $("#encoders1").html(s["encoders"][1])
   
-  // Update servo status if available
+  // Update servo status
   if (s["servo_status"]) {
     $("#servo-position").html(s["servo_status"]["position"])
     $("#servo-enabled").html(s["servo_status"]["enabled"] ? "Yes" : "No")
   }
   
-  // Update speed button styling if it changed on the server
+  // Update speed level
   if (s["speed_level"] !== current_speed) {
     current_speed = s["speed_level"]
     $(".speed-btn").removeClass("speed-active")
     $("#" + current_speed + "-btn").addClass("speed-active")
     
-    // Sync with keyboard controls if initialized - NEW
     if (keyboardControls && keyboardControls.initialized) {
       keyboardControls.syncSpeedLevel(current_speed)
     }
   }
 
-  // Sync pause state with server
+  // Sync pause state
   if (s["paused"] !== undefined && s["paused"] !== is_paused) {
     is_paused = s["paused"]
     if (is_paused) {
@@ -521,12 +506,11 @@ function update_status(json) {
     }
   }
 
-  // Update ReSpeaker/Recording status
+  // Update recording status
   if (s["recording"]) {
     respeaker_status = s["recording"]
     updateReSpeakerDisplay(respeaker_status)
     
-    // Sync recording state
     if (s["recording"]["is_recording"] !== is_recording) {
       is_recording = s["recording"]["is_recording"]
       if (is_recording) {
@@ -539,15 +523,9 @@ function update_status(json) {
     }
   }
 
-  // Update user ID from top-level status (this will override recording status)
-  if (s["user_id"] && !$("#user-id-input").is(':focus')) {
-    $("#current-user").text(s["user_id"])
-    $("#user-id-input").val(s["user_id"])
-    user_id = s["user_id"]
-  }
-
   setTimeout(poll, 100)
 }
+
 
 function updateReSpeakerDisplay(status) {
   // Update ReSpeaker initialization status

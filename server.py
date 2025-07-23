@@ -217,22 +217,38 @@ def stop_recording():
     success = recording_control.stop_recording()
     return json.dumps({"success": success})
 
+
 @app.route("/set_user_id", methods=['POST'])
 def set_user_id():
     """Set user ID for file naming"""
-    data = request.get_json()
-    user_id = data.get('user_id', '')
-    
-    if recording_control.set_user_id(user_id):
-        return json.dumps({"success": True, "message": f"User ID set to {recording_control.user_id}"})
-    else:
-        return json.dumps({"success": False, "message": "Invalid user ID"})
+    try:
+        data = request.get_json()
+        if not data:
+            return json.dumps({"success": False, "message": "No data received"})
+        
+        user_id = data.get('user_id', '').strip()
+        
+        if not user_id:
+            return json.dumps({"success": False, "message": "User ID cannot be empty"})
+        
+        # Validate user ID format
+        import re
+        if not re.match(r'^[a-zA-Z0-9_-]+$', user_id):
+            return json.dumps({"success": False, "message": "Invalid format"})
+        
+        # Set user ID
+        if recording_control.set_user_id(user_id):
+            return json.dumps({
+                "success": True, 
+                "message": f"User ID set to {recording_control.user_id}",
+                "user_id": recording_control.user_id
+            })
+        else:
+            return json.dumps({"success": False, "message": "Failed to set user ID"})
+            
+    except Exception as e:
+        return json.dumps({"success": False, "message": f"Server error: {str(e)}"})
 
-@app.route("/recording_status.json")
-def recording_status():
-    """Get detailed recording status"""
-    status = recording_control.get_recording_status()
-    return json.dumps(status)
 
 # ========== SERVO POSITION CONTROL WITH PAUSE CHECK ==========
 
@@ -311,7 +327,35 @@ def get_servo_pwm_values():
     pwm_values = a_star.servo_get_pwm_values()
     return json.dumps(pwm_values)
 
+
 # ========== STATUS REPORTING WITH ENHANCED RECORDING INFO ==========
+
+@app.route("/test_user_id")
+def test_user_id():
+    """测试用户ID的当前状态"""
+    info = {
+        "current_user_id": recording_control.user_id,
+        "object_id": id(recording_control),
+        "class_name": recording_control.__class__.__name__,
+        "module_name": recording_control.__class__.__module__
+    }
+    print(f"TEST: {info}")
+    return json.dumps(info, indent=2)
+
+@app.route("/force_set_user_id/<user_id>")
+def force_set_user_id(user_id):
+    """强制设置用户ID用于测试"""
+    old_id = recording_control.user_id
+    recording_control.user_id = user_id  # 直接设置
+    new_id = recording_control.user_id
+    
+    result = {
+        "old_id": old_id,
+        "new_id": new_id,
+        "success": new_id == user_id
+    }
+    print(f"FORCE SET: {result}")
+    return json.dumps(result, indent=2)
 
 @app.route("/status.json")
 def status():
@@ -335,8 +379,9 @@ def status():
         "servo_pwm": servo_pwm,
         "paused": paused,
         "recording": recording_status,
-        "user_id": recording_control.user_id  # Add this line
+        "user_id": recording_control.user_id
     }
     return json.dumps(data)
+
 if __name__ == "__main__":
     app.run(host = "0.0.0.0")
