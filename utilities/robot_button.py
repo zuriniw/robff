@@ -24,13 +24,28 @@ class RobotButtonControl:
     #     }
     # }
 
+    # HARD_CODED_SPEEDS = {
+    #     "slow": {
+    #         "forward": (82, 1), "backward": (-82, -1),
+    #         "rotate_left": (-30, 30), "rotate_right": (30, -30)
+    #     },
+    #     "moderate": {
+    #         "forward": (110, 85), "backward": (-110, -85),
+    #         "rotate_left": (-90, 90), "rotate_right": (90, -90)
+    #     },
+    #     "fast": {
+    #         "forward": (230, 233), "backward": (-238, -230),
+    #         "rotate_left": (-100, 100), "rotate_right": (100, -100)
+    #     }
+    # }
+
     HARD_CODED_SPEEDS = {
         "slow": {
-            "forward": (82, 1), "backward": (-82, -1),
+            "forward": (72, 1), "backward": (-72, -1),
             "rotate_left": (-30, 30), "rotate_right": (30, -30)
         },
         "moderate": {
-            "forward": (110, 85), "backward": (-110, -85),
+            "forward": (100, 85), "backward": (-100, -85),
             "rotate_left": (-90, 90), "rotate_right": (90, -90)
         },
         "fast": {

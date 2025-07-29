@@ -33,7 +33,7 @@ import time
 from flask import Response
 
 def generate_video():
-    cap = cv2.VideoCapture('/dev/front_cam')
+    cap = cv2.VideoCapture('/dev/video0')
     # cap = cv2.VideoCapture('/dev/rear_cam')
 
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)

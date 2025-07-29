@@ -10,7 +10,7 @@
  * Updated with servo control mappings and presets
  * Added spacebar pause toggle functionality
  * Enhanced with composite movement support (W+A, W+D, S+A, S+D)
- * Added T key for 11-second countdown timer
+ * Added T key for 4-second countdown timer
  */
 
 class KeyboardControls {
@@ -71,18 +71,18 @@ class KeyboardControls {
     
     // Preset actions configuration (完全保留原配置)
     this.presets = {
-      '1': { name: 'Ready To Push Box', type: 'simple', lift: 1273, tilt: 1888, gripper: 1754 },
-      '2': { name: 'press mid', type: 'simple', lift: 1530, tilt: 1580, gripper: 1000 },
+      '1': { name: 'ready to drag the box', type: 'simple', lift: 1273, tilt: 1888, gripper: 1754 },
+      '2': { name: 'drag the box', type: 'simple', lift: 1530, tilt: 1580, gripper: 1000 },
       '3': { name: 'Quick Press Key', type: 'sequence', sequence: [
         { delay: 0, lift: 1150, tilt: 1510, gripper: 2330 },
-        { delay: 500, lift: 1280, tilt: 1510, gripper: null },
-        { delay: 1000, lift: 1150, tilt: 1510, gripper: null },
-        { delay: 1500, lift: 1280, tilt: 1510, gripper: null },
-        { delay: 2000, lift: 1150, tilt: 1510, gripper: null },
+        { delay: 500, lift: 1630, tilt: 1515, gripper: null },
+        { delay: 1000, lift: 1350, tilt: 1510, gripper: null },
+        { delay: 1500, lift: 1630, tilt: 1515, gripper: null },
+        { delay: 2000, lift: 1350, tilt: 1510, gripper: null },
       ]},
-      '4': { name: 'press light', type: 'simple', lift: 1330, tilt: 1580, gripper: 1000 },
-      '5': { name: 'badminton', type: 'simple', lift: 1630, tilt: 1890, gripper: 500 },
-      '6': { name: 'Drop Position', type: 'simple', lift: 1200, tilt: 1600, gripper: 500 },
+      '4': { name: 'ready to press', type: 'simple', lift: 1160, tilt: 1310, gripper: 2330 },
+      '5': { name: 'press down', type: 'simple', lift: 1630, tilt: 1310, gripper: 2230 },
+      '6': { name: 'ready to capture badminton', type: 'simple', lift: 1630, tilt: 1890, gripper: 500 },
       '7': { name: 'Locate The Capture', type: 'simple', lift: 1200, tilt: 1600, gripper: 500 },
       '8': { name: 'press intense', type: 'simple', lift: 1630, tilt: 1515, gripper: 500 },
       '9': { name: 'Try To Pick', type: 'sequence', sequence: [
@@ -142,7 +142,7 @@ class KeyboardControls {
     this.initialized = true
     
     console.log('KeyboardControls: Initialized successfully with composite movement support')
-    console.log('Controls: WASD=move (supports combinations), [/]=speed, T=11s countdown, SPACEBAR=pause/resume, I/J/N=lift, U/H/B=tilt, -/==gripper, 0-9=presets')
+    console.log('Controls: WASD=move (supports combinations), [/]=speed, T=4s countdown, SPACEBAR=pause/resume, I/J/N=lift, U/H/B=tilt, -/==gripper, 0-9=presets')
     return true
   }
   
@@ -221,7 +221,7 @@ class KeyboardControls {
     // Handle countdown timer - T key
     if (key === 't' || key === 'T') {
       if (!this.isSystemPaused()) {
-        this.startCountdown(11)
+        this.startCountdown(4)
       }
       e.preventDefault()
       return
@@ -436,11 +436,11 @@ class KeyboardControls {
     } else if (preset.type === 'sequence') {
       this.executeSequence(preset.sequence)
       
-      // 🆕 Auto-start 11s countdown after gesture sequence completes
+      // 🆕 Auto-start 4s countdown after gesture sequence completes
       if (presetKey === 'g') {
         setTimeout(() => {
           console.log('KeyboardControls: Gesture complete → Auto-starting 11s countdown')
-          this.startCountdown(11)
+          this.startCountdown(4)
           
           // Show feedback for auto-timer activation
           this.showAutoTimerFeedback()
